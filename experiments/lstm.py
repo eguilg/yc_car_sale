@@ -2,6 +2,7 @@ import numpy
 import pandas as pd
 import matplotlib.pyplot as plt
 import math
+import datetime
 from keras.models import Sequential
 from keras.layers import Dense
 from keras.layers import LSTM
@@ -11,6 +12,7 @@ from sklearn.metrics import mean_squared_error
 from preprocess.gen_time_series import gen_sale_quantity_series
 # convert an array of values into a dataset matrix
 look_back = 1
+k = 1.12
 dataset ,testset = gen_sale_quantity_series(look_back=look_back)
 # fix random seed for reproducibility
 numpy.random.seed(7)
@@ -58,14 +60,14 @@ valiPredict = model.predict(valiX)
 # valiY = scaler.inverse_transform([valiY])
 # calculate root mean squared error
 totallY = numpy.vstack((trainPredict,valiPredict))
-inversedY = scalerY.inverse_transform(totallY)
+inversedY = k*scalerY.inverse_transform(totallY)
 trainPredict,valiPredict = inversedY[0:train_size,:], inversedY[train_size:len(inversedY),:]
 Y = scalerY.inverse_transform(Y)
 trainY, valiY = Y[0:train_size,:], Y[train_size:len(Y),:]
 trainScore = math.sqrt(mean_squared_error(trainY[:], trainPredict[:,0]))
-print('Train Score: %.2f msle' % (trainScore))
+print('Train Score: %.2f mse' % (trainScore))
 valiScore = math.sqrt(mean_squared_error(valiY[:], valiPredict[:,0]))
-print('vali Score: %.2f msle' % (valiScore))
+print('vali Score: %.2f mse' % (valiScore))
 # shift train predictions for plotting
 fig = plt.figure()
 ax1=fig.add_subplot(211)
@@ -86,7 +88,8 @@ testX = testset.values[:,:look_back]
 testX = numpy.reshape(scalerX.transform(testX),(len(testX),look_back,1))
 
 testPredict = model.predict(testX)
-testPredict = scalerY.inverse_transform(testPredict)
+testPredict = k*scalerY.inverse_transform(testPredict)
 sub = pd.read_csv('../data/yancheng_testA_20171225.csv')
 sub.predict_quantity = numpy.reshape(testPredict,(testPredict.shape[0]))
-sub.to_csv('../sub/lstm_lb'+str(look_back)+'.csv',index=False)
+timestamp = datetime.datetime.now().strftime('%m%d%H%M')
+sub.to_csv('../sub/lstm_lb'+str(look_back)+'_'+timestamp+'.csv',index=False)
