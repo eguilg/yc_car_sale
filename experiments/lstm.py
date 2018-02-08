@@ -1,4 +1,4 @@
-import numpy
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import math
@@ -11,23 +11,25 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error
 from preprocess.gen_time_series import gen_sale_quantity_series
 # convert an array of values into a dataset matrix
-look_back = 1
-k = 1.12
-dataset ,testset = gen_sale_quantity_series(look_back=look_back)
+seq_len = 12
+k = 1
+epoch = 500
+batch_size = 200
+dataset ,testset = gen_sale_quantity_series(seq_len=seq_len)
 # fix random seed for reproducibility
-numpy.random.seed(7)
+np.random.seed(7)
 # load the dataset
 # dataframe = read_csv('international-airline-passengers.csv', usecols=[1], engine='python', skipfooter=3)
 dataset = dataset.values
-numpy.random.shuffle(dataset)
+np.random.shuffle(dataset)
 dataset = dataset.astype('float32')
-X = dataset[:,:look_back]
-Y = dataset[:,:-2]
+X = dataset[:,:seq_len]
+Y = dataset[:,-2]
 # normalize the dataset
 scalerX = MinMaxScaler(feature_range=(0, 1))
 scalerY = MinMaxScaler(feature_range=(0, 1))
 X = scalerX.fit_transform(X)
-Y = scalerY.fit_transform(Y)
+Y = scalerY.fit_transform(np.reshape(Y,(-1,1)))
 # split into train and vali sets
 train_size = int(len(dataset) * 0.67)
 vali_size = len(dataset) - train_size
@@ -35,21 +37,19 @@ trainX, valiX = X[0:train_size,:], X[train_size:len(X),:]
 trainY, valiY = Y[0:train_size,:], Y[train_size:len(Y),:]
 
 
-
-
-
 # reshape input to be [samples, time steps, features]
-trainX = numpy.reshape(trainX, (trainX.shape[0], look_back,1))
-valiX = numpy.reshape(valiX, (valiX.shape[0], look_back,1))
+trainX = np.reshape(trainX, (trainX.shape[0], seq_len,1))
+valiX = np.reshape(valiX, (valiX.shape[0], seq_len,1))
 # create and fit the LSTM network
 model = Sequential()
-model.add(LSTM(10,input_dim=1,input_length=look_back,dropout_W=0.2, dropout_U=0.2))
+model.add(LSTM(32,input_shape=(trainX.shape[1],trainX.shape[2]),
+               dropout_W=0.2, dropout_U=0.2))
 
-model.add(Dense(1))
+model.add(Dense(trainY.shape[1]))
 
 model.compile(loss='mean_squared_error', optimizer='adam')
 model.summary()
-model.fit(trainX, trainY, epochs=200, batch_size=200, verbose=2)
+model.fit(trainX, trainY, epochs=epoch, batch_size=batch_size, verbose=2)
 # make predictions
 trainPredict = model.predict(trainX)
 valiPredict = model.predict(valiX)
@@ -59,7 +59,7 @@ valiPredict = model.predict(valiX)
 # valiPredict = scaler.inverse_transform(valiPredict)
 # valiY = scaler.inverse_transform([valiY])
 # calculate root mean squared error
-totallY = numpy.vstack((trainPredict,valiPredict))
+totallY = np.vstack((trainPredict,valiPredict))
 inversedY = k*scalerY.inverse_transform(totallY)
 trainPredict,valiPredict = inversedY[0:train_size,:], inversedY[train_size:len(inversedY),:]
 Y = scalerY.inverse_transform(Y)
@@ -84,12 +84,12 @@ ax2.legend(['pred','true'])
 plt.show()
 
 
-testX = testset.values[:,:look_back]
-testX = numpy.reshape(scalerX.transform(testX),(len(testX),look_back,1))
+testX = testset.values[:,:seq_len]
+testX = np.reshape(scalerX.transform(testX),(len(testX),seq_len,1))
 
 testPredict = model.predict(testX)
 testPredict = k*scalerY.inverse_transform(testPredict)
 sub = pd.read_csv('../data/yancheng_testA_20171225.csv')
-sub.predict_quantity = numpy.reshape(testPredict,(testPredict.shape[0]))
+sub.predict_quantity = np.reshape(testPredict,(testPredict.shape[0]))
 timestamp = datetime.datetime.now().strftime('%m%d%H%M')
-sub.to_csv('../sub/lstm_lb'+str(look_back)+'_'+timestamp+'.csv',index=False)
+sub.to_csv('../sub/lstm_sl'+str(seq_len)+'_'+'e'+str(epoch)+'b'+str(batch_size)+'_'+timestamp+'.csv',index=False)
