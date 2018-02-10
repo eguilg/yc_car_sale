@@ -7,12 +7,9 @@ from keras.models import Model
 from keras.layers import Input
 from keras.layers import Dense
 from keras.layers import LSTM
-from keras.layers import Flatten
-from keras import backend as K
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.preprocessing import FunctionTransformer
 from sklearn.metrics import mean_squared_error
-from preprocess.gen_time_series import gen_sale_quantity_series
+from feature.time_series import gen_sale_quantity_series
 # convert an array of values into a dataset matrix
 seq_len = 12
 
