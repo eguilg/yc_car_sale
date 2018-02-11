@@ -5,7 +5,7 @@ from preprocess.preprocess import load_preprocessed_data
 def gen_sale_quantity_series(seq_len=3):
 
     raw_train = load_preprocessed_data()
-    sale_quantity_perclass = raw_train[['sale_date', 'class_id', 'sale_quantity']]\
+    sale_quantity_perclass = raw_train[['time_index', 'class_id', 'sale_quantity']]\
         .groupby(by=['class_id','sale_date'], as_index=False).sum()
     sale_quantity_perclass.sort_values(by=['class_id','sale_date'])
     classes, class_sale_counts = np.unique(sale_quantity_perclass['class_id'], return_counts=True)

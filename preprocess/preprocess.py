@@ -1,6 +1,11 @@
-from util.load_data import load_raw_data
-import pandas as pd
 import os
+import numpy as np
+import pandas as pd
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import LabelEncoder
+from util.load_data import load_raw_data
+
+
 
 def _price_lower(price_level):
     price_level = price_level.replace('WL','')
@@ -39,7 +44,7 @@ def _data_cleaning(train_data):
 
 
     # categories mapping
-    train_data.if_charging = train_data.if_charging.map({'L': 0, 'T': 1})
+    # train_data.if_charging = train_data.if_charging.map({'L': 0, 'T': 1})
     train_data.rated_passenger = train_data.rated_passenger.map({'4': 4,
                                                                  '5': 5,
                                                                  '4-5': 4.5,
@@ -50,13 +55,13 @@ def _data_cleaning(train_data):
                                                                  '6-8': 7.1,
                                                                  '7-8': 7.5,
                                                                  '9': 9}).astype(float)
-    train_data.gearbox_type = train_data.gearbox_type.map({'AMT': 0,
-                                                           'AT': 1,
-                                                           'AT;DCT': 2,
-                                                           'CVT': 3,
-                                                           'DCT': 4,
-                                                           'MT': 5,
-                                                           'MT;AT': 6}).astype(int)
+    # train_data.gearbox_type = train_data.gearbox_type.map({'AMT': 0,
+    #                                                        'AT': 1,
+    #                                                        'AT;DCT': 2,
+    #                                                        'CVT': 3,
+    #                                                        'DCT': 4,
+    #                                                        'MT': 5,
+    #                                                        'MT;AT': 6}).astype(int)
     train_data.TR = train_data.TR.map({'0': 0,
                                        '1': 1,
                                        '4': 4,
@@ -68,7 +73,11 @@ def _data_cleaning(train_data):
                                        '8': 8,
                                        '9': 9}).astype(float)
 
-    # transform price level to lower and upper bound
+    train_data['brand_id'] = LabelEncoder().fit_transform(np.reshape(train_data['brand_id'].values, (-1, 1)))
+    train_data['gearbox_type'] = LabelEncoder().fit_transform(np.reshape(train_data['gearbox_type'].values, (-1, 1)))
+    train_data['if_charging'] = LabelEncoder().fit_transform(np.reshape(train_data['if_charging'].values, (-1, 1)))
+
+    # transform price level to lower and upper bounds
     train_data['price_lower'] = train_data.price_level.apply(_price_lower)
     train_data['price_upper'] = train_data.price_level.apply(_price_upper)
 
@@ -77,20 +86,42 @@ def _data_cleaning(train_data):
     train_data['month'] = train_data.sale_date.apply(lambda x: x.month)
     train_data['time_index'] = (train_data.year - 2012) * 12 + train_data.month
 
+    train_data.drop('sale_date', axis=1, inplace=True)
     train_data.drop('price_level', axis=1, inplace=True)
     train_data.sort_values(by=['class_id', 'time_index'], inplace=True)
 
     return train_data
 
+# convert categorical feature to one hot
+def onehot_encode(train_data,categorical_columns):
+    for col in categorical_columns:
+        if col in train_data.columns:
+            enc = OneHotEncoder()
+            one_hot = enc.fit_transform(np.reshape(train_data[col].values,(-1,1))).toarray()
+            for i in range(one_hot.shape[1]):
+                train_data[col+'_'+str(i)] = one_hot[:,i]
+            train_data.drop([col],axis=1,inplace=True)
+    return train_data
 
 
-def load_preprocessed_data(path='../data/yancheng_train_cleaned.csv'):
+def load_preprocessed_data(path='../data/yancheng_train_preprocessed.csv', one_hot = False):
+    if one_hot:
+        path =  path.split('.csv')[0]+'_onehot.csv'
     if os.path.exists(path):
-        print('loading existing cleaned data file..')
+        print('loading existing preprocessed data file..')
         return pd.read_csv(path)
     else:
-        print('cleaned data dose not exist ,start data cleaning...')
-        cleaned_data = _data_cleaning(load_raw_data())
-        cleaned_data.to_csv(path,index=False)
-        print('data cleaning done, result saved.')
-        return cleaned_data
+        print('cleaned data dose not exist ,start data processing...')
+        data = _data_cleaning(load_raw_data())
+        if one_hot:
+            categorical_columns = ['brand_id','type_id','level_id','department_id','TR','gearbox_type',
+                                   'if_charging','driven_type_id','fuel_type_id','newenergy_type_id',
+                                   'emission_standards_id','if_MPV_id','if_luxurious_id']
+
+            data = onehot_encode(data,categorical_columns)
+        data.to_csv(path,index=False)
+        print('data preprocess done, result saved.')
+        return data
+
+
+load_preprocessed_data(one_hot=True)
