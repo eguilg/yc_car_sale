@@ -117,7 +117,8 @@ def one_hot_encode(train_data,categorical_columns):
 
 
 def _scorer(ground_truth, pred):
-    return mean_squared_error(np.square(ground_truth), np.square(pred))
+    # return mean_squared_error(np.square(ground_truth), np.square(pred))
+    return mean_squared_error(np.expm1(ground_truth), np.expm1(pred))
 # using XGBRegressor to predict the missing price data
 # note to input the preprocessed data with one hot encode
 def predict_missing_price(preprocessed_data, one_hot=False):
@@ -127,13 +128,16 @@ def predict_missing_price(preprocessed_data, one_hot=False):
     feature_columns = [i for i in preprocessed_data.columns if i not in ['class_id','price']]
     y_column = ['price']
     testX =preprocessed_data.loc[test_index, feature_columns].values
-    # testY =
+
     trainX = preprocessed_data.loc[(1-test_index).astype(bool), feature_columns].values
     trainY = preprocessed_data.loc[(1-test_index).astype(bool), y_column].values
 
     # plt.hist(trainY)
     # plt.show()
-    trs = FunctionTransformer(func=np.sqrt,inverse_func=np.square)
+
+    # 销量数据使用log1p处理后更接近正态分布，比sqrt处理要好
+    # trs = FunctionTransformer(func=np.sqrt, inverse_func=np.square)
+    trs = FunctionTransformer(func=np.log1p,inverse_func=np.expm1)
     scaler = MinMaxScaler()
     trainX = scaler.fit_transform(trainX)
     trainY = trs.fit_transform(np.reshape(trainY,(-1,1)))
@@ -144,7 +148,7 @@ def predict_missing_price(preprocessed_data, one_hot=False):
     clf = xgb.XGBRegressor(seed=12)
 
     if one_hot:
-        # ONE HOT with norm PARAMS
+        # ONE HOT with norm PARAMS sqare
         grid = [{
             'booster': ['gbtree'],
             'learning_rate': [0.1],
@@ -159,17 +163,33 @@ def predict_missing_price(preprocessed_data, one_hot=False):
         },
         ]
     else:
-        # no one hot PARAMS
+        # no one hot PARAMS sqrt
+
+        # grid = [{
+        #     'booster': ['gbtree'],
+        #     'learning_rate': [0.1],
+        #     # 'min_child_weight':[],
+        #     'max_depth': [2],
+        #     'gamma': [0.7],
+        #     'subsample': [0.1],
+        #     'colsample_bytree': [0.3],
+        #     'reg_alpha': [0.5],
+        #     'reg_lambda': [0.3],
+        #     'scale_pos_weight': [1]
+        # },
+        # ]
+
+        # no one hot PARAMS log1p
         grid = [{
             'booster': ['gbtree'],
-            'learning_rate': [0.1],
+            'learning_rate': [0.25],
             # 'min_child_weight':[],
             'max_depth': [2],
-            'gamma': [0.7],
+            'gamma': [0.09],
             'subsample': [0.1],
-            'colsample_bytree': [0.3],
+            'colsample_bytree': [0.95],
             'reg_alpha': [0.5],
-            'reg_lambda': [0.3],
+            'reg_lambda': [0.25],
             'scale_pos_weight': [1]
         },
         ]
@@ -192,11 +212,16 @@ def predict_missing_price(preprocessed_data, one_hot=False):
 
 def _gen_data_per_classmonth(df_per_classmonth):
     res = pd.Series(index=df_per_classmonth.columns)
+
+    # 对于每月各车型细分的销售数量求和
     res['sale_quantity'] = df_per_classmonth['sale_quantity'].sum()
+
+    # 其他特征求对销售数量的加权平均
     ave_col = [col for col in df_per_classmonth.columns if col != 'sale_quantity']
     res[ave_col] = np.average(df_per_classmonth[ave_col],
                               weights=df_per_classmonth['sale_quantity'],
                               axis=0)
+
     return res
 
 
@@ -228,7 +253,6 @@ def load_preprocessed_data(path='../data/yancheng_train_preprocessed.csv',
         # 生成每个class_id 按月的销售记录(根据销量加权平均)
         data = data.groupby(by=['class_id','time_index'],as_index=False).apply(_gen_data_per_classmonth)
 
-
         data.to_csv(path,index=False)
 
         print('data preprocess done, result saved.')
@@ -236,4 +260,4 @@ def load_preprocessed_data(path='../data/yancheng_train_preprocessed.csv',
 
 if __name__ == '__main__':
     # load_preprocessed_data(one_hot=False)
-    load_preprocessed_data(one_hot=True)
+    load_preprocessed_data(one_hot=False)
