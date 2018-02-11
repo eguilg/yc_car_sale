@@ -3,8 +3,17 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import FunctionTransformer
+from sklearn.preprocessing import MinMaxScaler
+import xgboost as xgb
+from sklearn.model_selection import GridSearchCV
+from sklearn.metrics import mean_squared_error
+from sklearn.metrics import make_scorer
+import matplotlib.pyplot as plt
 from util.load_data import load_raw_data
 
+# 该模块包含所有数据清洗、预处理操作，
+# 并在最后用 load_preprocessed_data() 函数综合起来
 
 
 def _price_lower(price_level):
@@ -76,7 +85,7 @@ def _data_cleaning(train_data):
     train_data['brand_id'] = LabelEncoder().fit_transform(np.reshape(train_data['brand_id'].values, (-1, 1)))
     train_data['gearbox_type'] = LabelEncoder().fit_transform(np.reshape(train_data['gearbox_type'].values, (-1, 1)))
     train_data['if_charging'] = LabelEncoder().fit_transform(np.reshape(train_data['if_charging'].values, (-1, 1)))
-
+    train_data['class_id_encoded'] = LabelEncoder().fit_transform(np.reshape(train_data['class_id'].values, (-1, 1)))
     # transform price level to lower and upper bounds
     train_data['price_lower'] = train_data.price_level.apply(_price_lower)
     train_data['price_upper'] = train_data.price_level.apply(_price_upper)
@@ -86,14 +95,17 @@ def _data_cleaning(train_data):
     train_data['month'] = train_data.sale_date.apply(lambda x: x.month)
     train_data['time_index'] = (train_data.year - 2012) * 12 + train_data.month
 
+    # drop掉旧的表示方式
     train_data.drop('sale_date', axis=1, inplace=True)
     train_data.drop('price_level', axis=1, inplace=True)
+
+    # 排序
     train_data.sort_values(by=['class_id', 'time_index'], inplace=True)
 
     return train_data
 
 # convert categorical feature to one hot
-def onehot_encode(train_data,categorical_columns):
+def one_hot_encode(train_data,categorical_columns):
     for col in categorical_columns:
         if col in train_data.columns:
             enc = OneHotEncoder()
@@ -104,24 +116,109 @@ def onehot_encode(train_data,categorical_columns):
     return train_data
 
 
-def load_preprocessed_data(path='../data/yancheng_train_preprocessed.csv', one_hot = False):
+def scorer(ground_truth, pred):
+    return mean_squared_error(np.square(ground_truth), np.square(pred))
+# using XGBRegressor to predict the missing price data
+# note to input the preprocessed data with one hot encode
+def predict_missing_price(preprocessed_data, one_hot=False):
+
+    test_index = preprocessed_data.price != preprocessed_data.price
+
+    feature_columns = [i for i in preprocessed_data.columns if i not in ['class_id','price']]
+    y_column = ['price']
+    testX =preprocessed_data.loc[test_index, feature_columns].values
+    # testY =
+    trainX = preprocessed_data.loc[(1-test_index).astype(bool), feature_columns].values
+    trainY = preprocessed_data.loc[(1-test_index).astype(bool), y_column].values
+
+    # plt.hist(trainY)
+    # plt.show()
+    trs = FunctionTransformer(func=np.sqrt,inverse_func=np.square)
+    scaler = MinMaxScaler()
+    trainX = scaler.fit_transform(trainX)
+    trainY = trs.fit_transform(np.reshape(trainY,(-1,1)))
+
+    # plt.hist(trainY)
+    # plt.show()
+    print(trainX.shape,trainY.shape)
+    clf = xgb.XGBRegressor(seed=12)
+
+    if one_hot:
+        # ONE HOT with norm PARAMS
+        grid = [{
+            'booster': ['gbtree'],
+            'learning_rate': [0.1],
+            # 'min_child_weight':[],
+            'max_depth': [2],
+            'gamma': [1],
+            'subsample': [0.3],
+            'colsample_bytree': [0.3],
+            'reg_alpha': [1.0],
+            'reg_lambda': [0.85],
+            'scale_pos_weight': [1]
+        },
+        ]
+    else:
+        # no one hot PARAMS
+        grid = [{
+            'booster': ['gbtree'],
+            'learning_rate': [0.1],
+            # 'min_child_weight':[],
+            'max_depth': [2],
+            'gamma': [0.7],
+            'subsample': [0.1],
+            'colsample_bytree': [0.3],
+            'reg_alpha': [0.5],
+            'reg_lambda': [0.3],
+            'scale_pos_weight': [1]
+        },
+        ]
+
+    gridCV = GridSearchCV(estimator=clf, param_grid=grid,
+                          scoring= make_scorer(scorer,greater_is_better=False),
+                          iid=False, n_jobs=-1, cv=6, verbose=1)
+
+
+    gridCV.fit(trainX, trainY)
+
+    print("best params:", gridCV.best_params_)
+    print('best score:', gridCV.best_score_)
+    testX = scaler.transform(testX)
+    predY = np.reshape(gridCV.predict(testX),(-1,1))
+    preprocessed_data.loc[test_index, y_column] = trs.inverse_transform(predY)
+
+
+    return preprocessed_data
+
+
+def load_preprocessed_data(path='../data/yancheng_train_preprocessed.csv',
+                           one_hot = True):
     if one_hot:
         path =  path.split('.csv')[0]+'_onehot.csv'
+
     if os.path.exists(path):
         print('loading existing preprocessed data file..')
         return pd.read_csv(path)
     else:
         print('cleaned data dose not exist ,start data processing...')
         data = _data_cleaning(load_raw_data())
-        if one_hot:
-            categorical_columns = ['brand_id','type_id','level_id','department_id','TR','gearbox_type',
-                                   'if_charging','driven_type_id','fuel_type_id','newenergy_type_id',
-                                   'emission_standards_id','if_MPV_id','if_luxurious_id']
 
-            data = onehot_encode(data,categorical_columns)
+
+        # fix misssing price
+        data = predict_missing_price(data,one_hot=False)
+
+        if one_hot:
+            categorical_columns = ['brand_id', 'type_id', 'level_id', 'department_id', 'TR', 'gearbox_type',
+                                   'if_charging', 'driven_type_id', 'fuel_type_id', 'newenergy_type_id',
+                                   'emission_standards_id', 'if_MPV_id', 'if_luxurious_id']
+
+            data = one_hot_encode(data, categorical_columns)
+
         data.to_csv(path,index=False)
+
         print('data preprocess done, result saved.')
         return data
 
-
-load_preprocessed_data(one_hot=True)
+if __name__ == '__main__':
+    # load_preprocessed_data(one_hot=False)
+    load_preprocessed_data(one_hot=True)
