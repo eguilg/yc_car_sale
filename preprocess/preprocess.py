@@ -5,10 +5,10 @@ from sklearn.preprocessing import OneHotEncoder
 from sklearn.preprocessing import LabelEncoder
 from sklearn.preprocessing import FunctionTransformer
 from sklearn.preprocessing import MinMaxScaler
-import xgboost as xgb
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import mean_squared_error
 from sklearn.metrics import make_scorer
+import xgboost as xgb
 import matplotlib.pyplot as plt
 from util.load_data import load_raw_data
 
@@ -116,7 +116,7 @@ def one_hot_encode(train_data,categorical_columns):
     return train_data
 
 
-def scorer(ground_truth, pred):
+def _scorer(ground_truth, pred):
     return mean_squared_error(np.square(ground_truth), np.square(pred))
 # using XGBRegressor to predict the missing price data
 # note to input the preprocessed data with one hot encode
@@ -175,7 +175,7 @@ def predict_missing_price(preprocessed_data, one_hot=False):
         ]
 
     gridCV = GridSearchCV(estimator=clf, param_grid=grid,
-                          scoring= make_scorer(scorer,greater_is_better=False),
+                          scoring= make_scorer(_scorer,greater_is_better=False),
                           iid=False, n_jobs=-1, cv=6, verbose=1)
 
 
@@ -190,6 +190,15 @@ def predict_missing_price(preprocessed_data, one_hot=False):
 
     return preprocessed_data
 
+def _gen_data_per_classmonth(df_per_classmonth):
+    res = pd.Series(index=df_per_classmonth.columns)
+    res['sale_quantity'] = df_per_classmonth['sale_quantity'].sum()
+    ave_col = [col for col in df_per_classmonth.columns if col != 'sale_quantity']
+    res[ave_col] = np.average(df_per_classmonth[ave_col],
+                              weights=df_per_classmonth['sale_quantity'],
+                              axis=0)
+    return res
+
 
 def load_preprocessed_data(path='../data/yancheng_train_preprocessed.csv',
                            one_hot = True):
@@ -200,19 +209,25 @@ def load_preprocessed_data(path='../data/yancheng_train_preprocessed.csv',
         print('loading existing preprocessed data file..')
         return pd.read_csv(path)
     else:
-        print('cleaned data dose not exist ,start data processing...')
+        print('preprocessed data dose not exist ,start data processing...')
+        # data cleaning
         data = _data_cleaning(load_raw_data())
 
 
         # fix misssing price
         data = predict_missing_price(data,one_hot=False)
 
+        # one hot encode
         if one_hot:
             categorical_columns = ['brand_id', 'type_id', 'level_id', 'department_id', 'TR', 'gearbox_type',
                                    'if_charging', 'driven_type_id', 'fuel_type_id', 'newenergy_type_id',
                                    'emission_standards_id', 'if_MPV_id', 'if_luxurious_id']
 
             data = one_hot_encode(data, categorical_columns)
+
+        # 生成每个class_id 按月的销售记录(根据销量加权平均)
+        data = data.groupby(by=['class_id','time_index'],as_index=False).apply(_gen_data_per_classmonth)
+
 
         data.to_csv(path,index=False)
 
