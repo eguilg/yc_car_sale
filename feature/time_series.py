@@ -2,38 +2,45 @@ import pandas as pd
 import numpy as np
 from preprocess.preprocess import load_preprocessed_data
 
-def gen_sale_quantity_series(seq_len=3):
 
-    raw_train = load_preprocessed_data()
-    sale_quantity_perclass = raw_train[['time_index', 'class_id', 'sale_quantity']]\
-        .groupby(by=['class_id','sale_date'], as_index=False).sum()
-    sale_quantity_perclass.sort_values(by=['class_id','sale_date'])
-    classes, class_sale_counts = np.unique(sale_quantity_perclass['class_id'], return_counts=True)
-    testset = pd.DataFrame(columns=list(range(1,seq_len+1))+['class_id'])
-    dataset = pd.DataFrame(columns=list(range(1,seq_len+1))+['y','class_id'])
-    for id in classes:
-        sale_quantity = sale_quantity_perclass[sale_quantity_perclass.class_id == id]
-        x_test = []
-        if sale_quantity.shape[0]>seq_len: # 销售记录数量大于观察窗口长度
-            for i in range(sale_quantity.shape[0]-seq_len):
-                x = sale_quantity.sale_quantity.iloc[i:i+seq_len].values.tolist()
-                y = sale_quantity.sale_quantity.iloc[i+seq_len]
-                dataset.loc[dataset.shape[0]] = x+[y,id]
-            x_test = sale_quantity.sale_quantity.iloc[-seq_len:].values.tolist()
 
-        else: # 销售记录数量小于等于观察窗口长度
-            y = sale_quantity.sale_quantity.iloc[-1]
-            x = sale_quantity.sale_quantity.iloc[:-1].values.tolist()
-            # 前面缺的值用均值补
-            x = [np.mean(x) for i in range(seq_len-len(x))]+x
-            dataset.loc[dataset.shape[0]] = x + [y,id]
-            x_test = sale_quantity.sale_quantity.values.tolist()
-            x_test = [np.mean(x_test) for i in range(seq_len-len(x_test))]+x_test
-        testset.loc[testset.shape[0]] = x_test + [id]
-    return dataset, testset
 
-if __name__ == "__main__":
-    seq_len = 12
-    dataset ,testset= gen_sale_quantity_series(seq_len=seq_len)
-    dataset.to_csv('../data/train_sale_lb='+str(seq_len)+'.csv',index=False)
-    testset.to_csv('../data/test_sale_lb=' + str(seq_len) + '.csv', index=False)
+# 生成目标月最近look_back_mon月的历史特征数据
+def _gen_time_series_features(preprocessed_class_data, look_back_year = 3,look_back_mon=3,
+                              not_equipment_columns = ['class_id_encoded'] + ['brand_id_' + str(k) for k in range(36)]):
+
+    res = pd.DataFrame(preprocessed_class_data[['time_index','sale_quantity']+not_equipment_columns])
+    equipment_columns = [col for col in preprocessed_class_data if col not in not_equipment_columns]
+    # for item in preprocessed_class_data:
+
+    for i in reversed(range(1, look_back_year + 1)):
+        res_y = pd.DataFrame(columns=equipment_columns)
+        for item_index in preprocessed_class_data.index:
+            t_index = preprocessed_class_data['time_index'] == preprocessed_class_data.loc[item_index,'time_index'] - i*12
+            if t_index.sum() == 1:
+                res_y.loc[len(res_y), :] = preprocessed_class_data.loc[t_index, equipment_columns].values[0]
+            else:
+                res_y.loc[len(res_y), :] = [-1 for i in range(len(equipment_columns))]
+            res = res.join(res_y, how='outer', lsuffix='', rsuffix='_y' + str(i))
+
+    for i in reversed(range(1, look_back_mon + 1)):
+        res_mon = pd.DataFrame(columns=equipment_columns)
+        for item_index in preprocessed_class_data.index:
+            t_index = preprocessed_class_data['time_index'] == preprocessed_class_data.loc[item_index,'time_index'] - i
+            if t_index.sum() == 1:
+                res_mon.loc[len(res_mon), :] = preprocessed_class_data.loc[t_index, equipment_columns].values[0]
+            else:
+                res_mon.loc[len(res_mon), :] = [-1 for i in range(len(equipment_columns))]
+            res = res.join(res_mon, how='outer', lsuffix='', rsuffix='_m' + str(i))
+
+    return res
+
+
+def gen_time_series_features(preprocessed_monthly_data, look_back_year = 3,look_back_mon=3):
+
+    return preprocessed_monthly_data.groupby(by=['class_id'], as_index=False).apply(_gen_time_series_features,
+                                                                                    look_back_year,look_back_mon)
+
+
+
+

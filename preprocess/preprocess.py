@@ -9,7 +9,6 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import mean_squared_error
 from sklearn.metrics import make_scorer
 import xgboost as xgb
-import matplotlib.pyplot as plt
 from util.load_data import load_raw_data
 
 # 该模块包含所有数据清洗、预处理操作，

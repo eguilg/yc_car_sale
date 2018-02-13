@@ -11,6 +11,7 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error
 from feature.time_series import gen_sale_quantity_series
 # convert an array of values into a dataset matrix
+
 seq_len = 12
 
 epoch = 500
