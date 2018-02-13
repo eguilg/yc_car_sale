@@ -21,7 +21,7 @@ def _gen_time_series_features(preprocessed_class_data, look_back_year = 3,look_b
                 res_y.loc[len(res_y), :] = preprocessed_class_data.loc[t_index, equipment_columns].values[0]
             else:
                 res_y.loc[len(res_y), :] = [-1 for i in range(len(equipment_columns))]
-            res = res.join(res_y, how='outer', lsuffix='', rsuffix='_y' + str(i))
+        res = res.join(res_y, how='outer', lsuffix='', rsuffix='_y' + str(i))
 
     for i in reversed(range(1, look_back_mon + 1)):
         res_mon = pd.DataFrame(columns=equipment_columns)
@@ -31,7 +31,7 @@ def _gen_time_series_features(preprocessed_class_data, look_back_year = 3,look_b
                 res_mon.loc[len(res_mon), :] = preprocessed_class_data.loc[t_index, equipment_columns].values[0]
             else:
                 res_mon.loc[len(res_mon), :] = [-1 for i in range(len(equipment_columns))]
-            res = res.join(res_mon, how='outer', lsuffix='', rsuffix='_m' + str(i))
+        res = res.join(res_mon, how='outer', lsuffix='', rsuffix='_m' + str(i))
 
     return res
 
