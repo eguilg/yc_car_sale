@@ -224,8 +224,9 @@ def _gen_data_per_classmonth(df_per_classmonth):
     return res
 
 
-def load_preprocessed_data(path='../data/yancheng_train_preprocessed.csv',
+def load_preprocessed_data(base_path='../data/',
                            one_hot = True):
+    path = base_path+'yancheng_train_preprocessed.csv'
     if one_hot:
         path =  path.split('.csv')[0]+'_onehot.csv'
 
@@ -235,7 +236,7 @@ def load_preprocessed_data(path='../data/yancheng_train_preprocessed.csv',
     else:
         print('preprocessed data dose not exist ,start data processing...')
         # data cleaning
-        data = _data_cleaning(load_raw_data())
+        data = _data_cleaning(load_raw_data(base_path))
 
 
         # fix misssing price
