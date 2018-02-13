@@ -18,9 +18,9 @@ def _gen_time_series_features(preprocessed_class_data, look_back_year = 3,look_b
         for item_index in preprocessed_class_data.index:
             t_index = preprocessed_class_data['time_index'] == preprocessed_class_data.loc[item_index,'time_index'] - i*12
             if t_index.sum() == 1:
-                res_y.loc[len(res_y), :] = preprocessed_class_data.loc[t_index, equipment_columns].values[0]
+                res_y.loc[item_index, :] = preprocessed_class_data.loc[t_index, equipment_columns].values[0]
             else:
-                res_y.loc[len(res_y), :] = [-1 for i in range(len(equipment_columns))]
+                res_y.loc[item_index, :] = [-1 for i in range(len(equipment_columns))]
         res = res.join(res_y, how='outer', lsuffix='', rsuffix='_y' + str(i))
 
     for i in reversed(range(1, look_back_mon + 1)):
@@ -28,9 +28,9 @@ def _gen_time_series_features(preprocessed_class_data, look_back_year = 3,look_b
         for item_index in preprocessed_class_data.index:
             t_index = preprocessed_class_data['time_index'] == preprocessed_class_data.loc[item_index,'time_index'] - i
             if t_index.sum() == 1:
-                res_mon.loc[len(res_mon), :] = preprocessed_class_data.loc[t_index, equipment_columns].values[0]
+                res_mon.loc[item_index, :] = preprocessed_class_data.loc[t_index, equipment_columns].values[0]
             else:
-                res_mon.loc[len(res_mon), :] = [-1 for i in range(len(equipment_columns))]
+                res_mon.loc[item_index, :] = [-1 for i in range(len(equipment_columns))]
         res = res.join(res_mon, how='outer', lsuffix='', rsuffix='_m' + str(i))
 
     return res
