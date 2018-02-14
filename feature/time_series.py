@@ -18,9 +18,9 @@ def load_class_brand_id_features(base_path='data/',test = True):
         if test:
 
             test_data = load_test_data(base_path)
-            test_data.sale_date = pd.to_datetime(test_data.sale_date, format='%Y%m')
-            test_data['year'] = test_data.sale_date.apply(lambda x: x.year)
-            test_data['month'] = test_data.sale_date.apply(lambda x: x.month)
+            test_data.predict_date = pd.to_datetime(test_data.predict_date, format='%Y%m')
+            test_data['year'] = test_data.predict_date.apply(lambda x: x.year)
+            test_data['month'] = test_data.predict_date.apply(lambda x: x.month)
             test_data['time_index'] = (test_data.year - 2012) * 12 + test_data.month
 
             res = pd.DataFrame(test_data['time_index'])
@@ -38,8 +38,8 @@ def load_class_brand_id_features(base_path='data/',test = True):
 
 def load_time_series_features(base_path, lb_num = 3,lb_year=True,test=True):
 
-    path = base_path + (lambda x: 'test' if x == True else 'train')(test) + '_lb'+str(lb_num)\
-           +( (lambda x: 'y' if x == True else 'm')(lb_year))+'_features.csv'
+    path = base_path + (lambda x: 'test' if x == True else 'train')(test) + '_lb'\
+           +( (lambda x: 'y' if x == True else 'm')(lb_year))+str(lb_num)+'_features.csv'
 
     if os.path.exists(path):
         return pd.read_csv(path)
@@ -51,9 +51,9 @@ def load_time_series_features(base_path, lb_num = 3,lb_year=True,test=True):
         index_data = preprocessed_data
         if test:
             test_data = load_test_data(base_path)
-            test_data.sale_date = pd.to_datetime(test_data.sale_date, format='%Y%m')
-            test_data['year'] = test_data.sale_date.apply(lambda x: x.year)
-            test_data['month'] = test_data.sale_date.apply(lambda x: x.month)
+            test_data.predict_date = pd.to_datetime(test_data.predict_date, format='%Y%m')
+            test_data['year'] = test_data.predict_date.apply(lambda x: x.year)
+            test_data['month'] = test_data.predict_date.apply(lambda x: x.month)
             test_data['time_index'] = (test_data.year - 2012) * 12 + test_data.month
             index_data = test_data
         k = 1
