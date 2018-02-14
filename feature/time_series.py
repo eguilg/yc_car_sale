@@ -7,7 +7,7 @@ from util.load_data import load_test_data
 
 not_equipment_columns = ['class_id_encoded'] + ['brand_id_' + str(m) for m in range(36)]
 
-def load_class_brand_id_features(base_path='data/',test = True):
+def __load_class_brand_id_features(base_path='data/',test = True):
 
     path = base_path+(lambda x:'test' if x==True else 'train')(test)+'_class_features.csv'
 
@@ -36,7 +36,7 @@ def load_class_brand_id_features(base_path='data/',test = True):
         res.to_csv(path,index=False)
         return res
 
-def load_time_series_features(base_path, lb_num = 3,lb_year=True,test=True):
+def __load_time_series_features(base_path, lb_num = 3,lb_year=True,test=True):
 
     path = base_path + (lambda x: 'test' if x == True else 'train')(test) + '_lb'\
            +( (lambda x: 'y' if x == True else 'm')(lb_year))+str(lb_num)+'_features.csv'
@@ -74,18 +74,18 @@ def load_time_series_features(base_path, lb_num = 3,lb_year=True,test=True):
 
 def load_train_time_series(base_path = 'data/',lb_year=3,lb_mon=3):
 
-    class_brand_id = load_class_brand_id_features(base_path,test=False)
+    class_brand_id = __load_class_brand_id_features(base_path,test=False)
 
     lb_year_data = pd.DataFrame()
     for i in reversed(range(1,lb_year+1)):
-        lb = load_time_series_features(base_path,lb_num=i,lb_year=True,test=False)
-        lb_year_data.join(lb,how='outer',rsuffix='_'+str(i))
+        lb = __load_time_series_features(base_path,lb_num=i,lb_year=True,test=False)
+        lb_year_data = lb_year_data.join(lb,how='outer',rsuffix='_'+str(i))
 
 
     lb_mon_data = pd.DataFrame()
     for i in reversed(range(1, lb_mon + 1)):
-        lb = load_time_series_features(base_path,lb_num=i, lb_year=False, test=False)
-        lb_mon_data.join(lb, how='outer', rsuffix='_'+str(i))
+        lb = __load_time_series_features(base_path,lb_num=i, lb_year=False, test=False)
+        lb_mon_data = lb_mon_data.join(lb, how='outer', rsuffix='_'+str(i))
 
 
     y = load_preprocessed_data(base_path)['sale_quantity']
@@ -94,17 +94,18 @@ def load_train_time_series(base_path = 'data/',lb_year=3,lb_mon=3):
 
 
 def load_test_time_series(base_path ='data/',lb_year=3,lb_mon=3):
-    class_brand_id = load_class_brand_id_features(base_path, test=True)
+    class_brand_id = __load_class_brand_id_features(base_path, test=True)
 
     lb_year_data = pd.DataFrame()
     for i in reversed(range(1, lb_year + 1)):
-        lb = load_time_series_features(base_path, lb_num=i, lb_year=True, test=True)
-        lb_year_data.join(lb, how='outer', rsuffix='_' + str(i))
+        lb = __load_time_series_features(base_path, lb_num=i, lb_year=True, test=True)
+        lb_year_data = lb_year_data.join(lb, how='outer', rsuffix='_' + str(i))
 
     lb_mon_data = pd.DataFrame()
     for i in reversed(range(1, lb_mon + 1)):
-        lb = load_time_series_features(base_path, lb_num=i, lb_year=False, test=True)
-        lb_mon_data.join(lb, how='outer', rsuffix='_' + str(i))
+        lb = __load_time_series_features(base_path, lb_num=i, lb_year=False, test=True)
+
+        lb_mon_data = lb_mon_data.join(lb, how='outer', rsuffix='_' + str(i))
 
 
     return class_brand_id,lb_year_data,lb_mon_data

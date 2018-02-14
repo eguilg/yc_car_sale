@@ -4,94 +4,154 @@ import matplotlib.pyplot as plt
 import math
 import datetime
 from keras.models import Model
-from keras.layers import Input
-from keras.layers import Dense
-from keras.layers import LSTM
+from keras.layers import Input,Dense,LSTM,Masking,Merge,Concatenate
+from keras.wrappers.scikit_learn import KerasRegressor
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error
-from feature.time_series import gen_sale_quantity_series
+from sklearn.metrics import make_scorer
+from sklearn.model_selection import GridSearchCV
+from feature.time_series import load_train_time_series, load_test_time_series
 # convert an array of values into a dataset matrix
 
-seq_len = 12
 
-epoch = 500
-batch_size = 300
-dataset ,testset = gen_sale_quantity_series(seq_len=seq_len)
-# fix random seed for reproducibility
-np.random.seed(7)
-# load the dataset
-# dataframe = read_csv('international-airline-passengers.csv', usecols=[1], engine='python', skipfooter=3)
-dataset = dataset.values
-np.random.shuffle(dataset)
-dataset = dataset.astype('float32')
-X = dataset[:,:seq_len]
-Y = dataset[:,-2]
-# normalize the dataset
-scalerX = MinMaxScaler(feature_range=(0, 1))
-scalerY = MinMaxScaler(feature_range=(0, 1))
+def create_model(dense_shape,year_seq_shape,month_seq_shape,
+                 seq_size = 64, final_dense_size = 32):
 
-X = scalerX.fit_transform(X)
-Y = scalerY.fit_transform(np.reshape(Y,(-1,1)))
-# split into train and vali sets
-train_size = int(len(dataset) * 0.80)
-vali_size = len(dataset) - train_size
-trainX, valiX = X[0:train_size,:], X[train_size:len(X),:]
-trainY, valiY = Y[0:train_size,:], Y[train_size:len(Y),:]
+    class_dense_input = Input(shape=dense_shape, name='dense_input')
+    class_dense_out = Dense(seq_size)(class_dense_input, name='class_dense')
+
+    year_seq_input = Input(shape=year_seq_shape, name='year_seq_input')
+    year_seq_mask = Masking(mask_value=-1, input_shape=year_seq_shape,
+                            name='year_seq_mask')(year_seq_input)
+    year_seq_out = LSTM(seq_size, input_shape=year_seq_shape,
+                        dropout_W=0.2, dropout_U=0.2, name='year_seq')(year_seq_mask)
+
+    month_seq_input = Input(shape=month_seq_shape, name='month_seq_input')
+    month_seq_mask = Masking(mask_value=-1, input_shape=month_seq_shape,
+                             name='year_seq_mask')(month_seq_input)
+    month_seq_out = LSTM(seq_size, input_shape=month_seq_shape,
+                         dropout_W=0.2, dropout_U=0.2, name='month_seq')(month_seq_mask)
+
+    seq_merge = Merge(layers=[year_seq_out, month_seq_out], name='seq_merge')
+    final_merge = Merge(layers=[class_dense_out, seq_merge], name='final_merge')
+
+    final_dense = Dense(final_dense_size)(final_merge)
+    main_out = Dense(1)(final_dense)
+
+    model = Model(inputs=[class_dense_input, year_seq_input, month_seq_input],
+                  outputs=[main_out])
+    model.compile(optimizer='adam', loss='mean_square_loss')
+    model.summary()
+    return model
+
+def _scorer(ground_truth, pred):
+    return mean_squared_error(ground_truth, pred)
+    # return mean_squared_error(np.expm1(ground_truth), np.expm1(pred))
+if __name__ == '__main__':
+    YEAR_SEQ_LEN = 3
+    MONTH_SEQ_LEN = 6
+
+    NUM_EPOCH = 500
+    BATCH_SIZE = 300
+    sale_quantity, class_feature_train, year_seq_train, month_seq_train = load_train_time_series(lb_year=YEAR_SEQ_LEN,
+                                                                               lb_mon=MONTH_SEQ_LEN)
+
+    class_feature_test, year_seq_test, month_seq_test =load_test_time_series(lb_year=YEAR_SEQ_LEN,
+                                                                               lb_mon=MONTH_SEQ_LEN)
+    # fix random seed for reproducibility
+    np.random.seed(7)
+    # load the dataset
+    # dataframe = read_csv('international-airline-passengers.csv', usecols=[1], engine='python', skipfooter=3)
+    Y_train = sale_quantity
+    X1_train = class_feature_train
+    X2_train = year_seq_train
+    X3_train = month_seq_train
+    print(X1_train.shape,X2_train.shape,X3_train.shape)
+    X1_test = class_feature_test
+    X2_test = year_seq_test
+    X3_test = month_seq_test
+    print(X1_test.shape, X2_test.shape, X3_test.shape)
+
+    # normalize the dataset
+    scalerX1 = MinMaxScaler(feature_range=(0, 1))
+    scalerX2 = MinMaxScaler(feature_range=(0, 1))
+    scalerX3 = MinMaxScaler(feature_range=(0, 1))
+    scalerY = MinMaxScaler(feature_range=(0, 1))
+
+    X1_train = scalerX1.fit_transform(X1_train)
+    X2_train = scalerX2.fit_transform(X2_train)
+    X3_train = scalerX3.fit_transform(X3_train)
+    Y_train = scalerY.fit_transform(np.reshape(Y_train,(-1,1)))
+
+    X1_test = scalerX1.transform(X1_test)
+    X2_test = scalerX2.transform(X2_test)
+    X3_test = scalerX3.transform(X3_test)
+    # split into train and vali sets
+    # train_size = int(len(X1_train) * 0.80)
+    # vali_size = len(X1_train) - train_size
+    # trainX, valiX = X[0:train_size,:], X[train_size:len(X),:]
+    # trainY, valiY = Y[0:train_size,:], Y[train_size:len(Y),:]
 
 
-# reshape input to be [samples, time steps, features]
-trainX = np.reshape(trainX, (trainX.shape[0], seq_len,1))
-valiX = np.reshape(valiX, (valiX.shape[0], seq_len,1))
-# create and fit the LSTM network
+    # reshape input to be [samples, time steps, features]
+    X2_train = np.reshape(X2_train, (X2_train.shape[0], YEAR_SEQ_LEN,int(X2_train.shape[1]/YEAR_SEQ_LEN)))
+    X3_train = np.reshape(X3_train, (X3_train.shape[0],YEAR_SEQ_LEN,int(X3_train.shape[1]/YEAR_SEQ_LEN)))
 
-seq_input = Input(shape=(trainX.shape[1],trainX.shape[2]), dtype='float32', name='seq_input')
-lstm_out = LSTM(32,input_shape=(trainX.shape[1],trainX.shape[2]),
-               dropout_W=0.2, dropout_U=0.2)(seq_input)
-main_out = Dense(trainY.shape[1],name='main_out')(lstm_out)
+    X2_test = np.reshape(X2_test, (X2_test.shape[0], YEAR_SEQ_LEN, int(X2_test.shape[1] / YEAR_SEQ_LEN)))
+    X3_test = np.reshape(X3_test, (X3_test.shape[0], YEAR_SEQ_LEN, int(X3_test.shape[1] / YEAR_SEQ_LEN)))
+    # create and fit the LSTM network
 
-model = Model(inputs=[seq_input ], outputs=[main_out])
+    model = KerasRegressor(build_fn=create_model, nb_epoch=NUM_EPOCH, batch_size=BATCH_SIZE, verbose=2)
 
-model.compile(loss='mean_squared_error', optimizer='adam')
-model.summary()
-model.fit([trainX], [trainY], epochs=epoch, batch_size=batch_size, verbose=2)
-# make predictions
-trainPredict = model.predict(trainX)
-valiPredict = model.predict(valiX)
+    grid = dict(
+        dense_shape=[(X1_train.shape[1])],
+        year_seq_shape = [(X2_train.shape[1], X2_train.shape[2])],
+        month_seq_shape = [(X3_train.shape[1], X2_train.shape[2])],
+        seq_size = [32,64,128],
+        final_dense_size = [32,64,128]
+    )
+    grid = GridSearchCV(estimator=model, param_grid=grid, n_jobs=-1,cv=6,refit=True,
+                        scoring=make_scorer(_scorer,greater_is_better=False))
 
-totallY = np.vstack((trainPredict,valiPredict))
-inversedY = scalerY.inverse_transform(totallY)
+    cv = grid.fit((X1_train,X2_train,X3_train), (Y_train))
+    # model.fit([X1_train,X2_train,X3_train], [Y_train], epochs=NUM_EPOCH, batch_size=BATCH_SIZE, verbose=2)
+    # make predictions
+    # trainPredict = model.predict(trainX)
+    # valiPredict = model.predict(valiX)
 
-trainPredict,valiPredict = inversedY[0:train_size,:], inversedY[train_size:len(inversedY),:]
-Y = scalerY.inverse_transform(Y)
+    # totallY = np.vstack((trainPredict,valiPredict))
+    # inversedY = scalerY.inverse_transform(totallY)
+    #
+    # trainPredict,valiPredict = inversedY[0:train_size,:], inversedY[train_size:len(inversedY),:]
+    # Y = scalerY.inverse_transform(Y)
+    #
+    # trainY, valiY = Y[0:train_size,:], Y[train_size:len(Y),:]
+    # trainScore = math.sqrt(mean_squared_error(trainY[:], trainPredict[:,0]))
+    # print('Train Score: %.2f rmse' % (trainScore))
+    # valiScore = math.sqrt(mean_squared_error(valiY[:], valiPredict[:,0]))
+    # print('vali Score: %.2f rmse' % (valiScore))
+    # shift train predictions for plotting
+    # fig = plt.figure()
+    # ax1=fig.add_subplot(211)
+    # ax1.plot(trainPredict,label='pred')
+    # ax1.plot(trainY,label='true',alpha =0.5)
+    # ax1.legend(['pred','true'])
+    # ax1.set_title('train')
+    # ax2 = fig.add_subplot(212)
+    # ax2.set_title('vali')
+    # ax2.plot(valiPredict,label = 'pred')
+    # ax2.plot(valiY, label = 'true',alpha =0.5)
+    # ax2.legend(['pred','true'])
+    #
+    # plt.show()
 
-trainY, valiY = Y[0:train_size,:], Y[train_size:len(Y),:]
-trainScore = math.sqrt(mean_squared_error(trainY[:], trainPredict[:,0]))
-print('Train Score: %.2f rmse' % (trainScore))
-valiScore = math.sqrt(mean_squared_error(valiY[:], valiPredict[:,0]))
-print('vali Score: %.2f rmse' % (valiScore))
-# shift train predictions for plotting
-fig = plt.figure()
-ax1=fig.add_subplot(211)
-ax1.plot(trainPredict,label='pred')
-ax1.plot(trainY,label='true',alpha =0.5)
-ax1.legend(['pred','true'])
-ax1.set_title('train')
-ax2 = fig.add_subplot(212)
-ax2.set_title('vali')
-ax2.plot(valiPredict,label = 'pred')
-ax2.plot(valiY, label = 'true',alpha =0.5)
-ax2.legend(['pred','true'])
-
-plt.show()
 
 
-testX = testset.values[:,:seq_len]
-testX = np.reshape(scalerX.transform(testX),(len(testX),seq_len,1))
 
-testPredict = model.predict(testX)
-testPredict = scalerY.inverse_transform(testPredict)
+    testPredict = cv.predict([X1_test,X2_train,X3_test])
+    testPredict = scalerY.inverse_transform(testPredict)
 
-sub = pd.read_csv('../data/yancheng_testA_20171225.csv')
-sub.predict_quantity = np.reshape(testPredict,(testPredict.shape[0]))
-timestamp = datetime.datetime.now().strftime('%m%d%H%M')
-sub.to_csv('../sub/lstm_sl'+str(seq_len)+'_'+'e'+str(epoch)+'b'+str(batch_size)+'_'+timestamp+'.csv',index=False)
+    sub = pd.read_csv('../data/yancheng_testA_20171225.csv')
+    sub.predict_quantity = np.reshape(testPredict,(testPredict.shape[0]))
+    timestamp = datetime.datetime.now().strftime('%m%d%H%M')
+    sub.to_csv('../sub/lstm_y'+str(YEAR_SEQ_LEN)+'m'+str(MONTH_SEQ_LEN)+'_'+'e'+str(NUM_EPOCH)+'b'+str(BATCH_SIZE)+'_'+timestamp+'.csv',index=False)
