@@ -15,3 +15,9 @@ def load_raw_data(base_path='../data/'):
 
 
 
+def load_test_data(base_path='../data/'):
+    path = base_path+'yancheng_testA_20171225.csv'
+    test_data = pd.read_csv(path, na_values=['-'])
+    # raw_data.sale_date = pd.to_datetime(raw_data.sale_date, format = '%Y%m')
+
+    return test_data
