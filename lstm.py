@@ -9,6 +9,7 @@ from sklearn.metrics import mean_squared_error
 from sklearn.metrics import make_scorer
 from sklearn.model_selection import GridSearchCV
 from feature.time_series import load_train_time_series, load_test_time_series
+from util.load_data import load_test_data
 
 
 def create_model(dense_shape,year_seq_shape,month_seq_shape,
@@ -45,11 +46,29 @@ def create_model(dense_shape,year_seq_shape,month_seq_shape,
 def _scorer(ground_truth, pred):
     return mean_squared_error(ground_truth, pred)
     # return mean_squared_error(np.expm1(ground_truth), np.expm1(pred))
+
+def cross_validation(sample_num, cv, seed):
+
+    np.random.seed(seed)
+    folds = []
+    all = list(range(sample_num))
+    remains = all
+    for i in range(cv):
+        ret = {}
+        ret['vali'] = np.random.choice(remains,int(sample_num/cv))
+        ret['train'] = list(set(all)^set(ret['vali']))
+        remains = list(set(remains)^set(ret['vali']))
+
+        folds.append(ret)
+
+    return folds
+
 if __name__ == '__main__':
+
     YEAR_SEQ_LEN = 3
     MONTH_SEQ_LEN = 6
 
-    NUM_EPOCH = 500
+    NUM_EPOCH = 10
     BATCH_SIZE = 300
     sale_quantity, class_feature_train, year_seq_train, month_seq_train = load_train_time_series(lb_year=YEAR_SEQ_LEN,
                                                                                                  lb_mon=MONTH_SEQ_LEN)
@@ -57,25 +76,25 @@ if __name__ == '__main__':
     class_feature_test, year_seq_test, month_seq_test =load_test_time_series(lb_year=YEAR_SEQ_LEN,
                                                                              lb_mon=MONTH_SEQ_LEN)
     # fix random seed for reproducibility
-    np.random.seed(7)
+    # np.random.seed(7)
     # load the dataset
     # dataframe = read_csv('international-airline-passengers.csv', usecols=[1], engine='python', skipfooter=3)
-    Y_train = sale_quantity
-    X1_train = class_feature_train
-    X2_train = year_seq_train
-    X3_train = month_seq_train
+    Y_all = sale_quantity
+    X1_all = class_feature_train
+    X2_all = year_seq_train
+    X3_all = month_seq_train
 
-    # X1_train_filter = class_feature_train != class_feature_train
-    X2_train_filter = year_seq_train != year_seq_train
-    X3_train_filter = month_seq_train != month_seq_train
+    # X1_all_filter = class_feature_train != class_feature_train
+    X2_all_filter = year_seq_train != year_seq_train
+    X3_all_filter = month_seq_train != month_seq_train
 
-    X2_train_min = X2_train.min(axis=0)
-    X2_train_min.fillna(-1,inplace =True)
-    X2_train.fillna(X2_train_min,inplace=True)
-    X3_train_min = X3_train.min(axis=0)
-    X3_train_min.fillna(-1, inplace=True)
-    X3_train.fillna(X3_train_min, inplace = True)
-    print(X1_train.shape,X2_train.shape,X3_train.shape)
+    X2_all_min = X2_all.min(axis=0)
+    X2_all_min.fillna(-1,inplace =True)
+    X2_all.fillna(X2_all_min,inplace=True)
+    X3_all_min = X3_all.min(axis=0)
+    X3_all_min.fillna(-1, inplace=True)
+    X3_all.fillna(X3_all_min, inplace = True)
+    print(X1_all.shape,X2_all.shape,X3_all.shape)
     X1_test = class_feature_test
     X2_test = year_seq_test
     X3_test = month_seq_test
@@ -97,44 +116,79 @@ if __name__ == '__main__':
     scalerX3 = MinMaxScaler(feature_range=(0, 1))
     scalerY = MinMaxScaler(feature_range=(0, 1))
 
-    X1_train = scalerX1.fit_transform(X1_train)
-    X2_train = scalerX2.fit_transform(X2_train)
-    X3_train = scalerX3.fit_transform(X3_train)
-    Y_train = scalerY.fit_transform(np.reshape(Y_train,(-1,1)))
+    X1_all = scalerX1.fit_transform(X1_all)
+    X2_all = scalerX2.fit_transform(X2_all)
+    X3_all = scalerX3.fit_transform(X3_all)
+    Y_all = scalerY.fit_transform(np.reshape(Y_all,(-1,1)))
 
     X1_test = scalerX1.transform(X1_test)
     X2_test = scalerX2.transform(X2_test)
     X3_test = scalerX3.transform(X3_test)
 
-    X2_train[X2_train_filter] = -1
-    X3_train[X3_train_filter] = -1
+    X2_all[X2_all_filter] = -1
+    X3_all[X3_all_filter] = -1
     X2_test[X2_test_filter] = -1
     X3_test[X3_test_filter] = -1
 
-    X2_train_filter = None
-    X3_train_filter = None
+    X2_all_filter = None
+    X3_all_filter = None
     X2_test_filter = None
     X3_test_filter = None
 
-
-
     # reshape input to be [samples, time steps, features]
-    X2_train = np.reshape(X2_train, (X2_train.shape[0], YEAR_SEQ_LEN,int(X2_train.shape[1]/YEAR_SEQ_LEN)))
-    X3_train = np.reshape(X3_train, (X3_train.shape[0],YEAR_SEQ_LEN,int(X3_train.shape[1]/YEAR_SEQ_LEN)))
+    X2_all = np.reshape(X2_all, (X2_all.shape[0], YEAR_SEQ_LEN,int(X2_all.shape[1] / YEAR_SEQ_LEN)))
+    X3_all = np.reshape(X3_all, (X3_all.shape[0],YEAR_SEQ_LEN,int(X3_all.shape[1] / YEAR_SEQ_LEN)))
 
     X2_test = np.reshape(X2_test, (X2_test.shape[0], YEAR_SEQ_LEN, int(X2_test.shape[1] / YEAR_SEQ_LEN)))
     X3_test = np.reshape(X3_test, (X3_test.shape[0], YEAR_SEQ_LEN, int(X3_test.shape[1] / YEAR_SEQ_LEN)))
     # create and fit the LSTM network
 
     # model = KerasRegressor(build_fn=create_model, nb_epoch=NUM_EPOCH, batch_size=BATCH_SIZE)
+    folds = cross_validation(X1_all.shape[0],6,seed=12)
+    train_scores = []
+    vali_scores = []
+    for i in range(len(folds)):
 
-    model = create_model(dense_shape=(X1_train.shape[1],),
-                         year_seq_shape=(X2_train.shape[1],X2_train.shape[2]),
-                         month_seq_shape=(X3_train.shape[1],X3_train.shape[2]))
+        train_index = folds[i]['train']
+        vali_index = folds[i]['vali']
+
+        X1_train = X1_all[train_index]
+        X2_train = X2_all[train_index]
+        X3_train = X3_all[train_index]
+        Y_train = Y_all[train_index]
+
+        X1_vali = X1_all[vali_index]
+        X2_vali = X2_all[vali_index]
+        X3_vali = X3_all[vali_index]
+        Y_vali = Y_all[vali_index]
+        model = create_model(dense_shape=(X1_train.shape[1],),
+                             year_seq_shape=(X2_train.shape[1],X2_train.shape[2]),
+                             month_seq_shape=(X3_train.shape[1],X3_train.shape[2]))
 
 
-    model.fit([X1_train,X2_train,X3_train], [Y_train], epochs=NUM_EPOCH, batch_size=BATCH_SIZE, verbose=2)
+        model.fit([X1_train,X2_train,X3_train], [Y_train], epochs=NUM_EPOCH, batch_size=BATCH_SIZE, verbose=1)
 
+        trainPredict = scalerY.inverse_transform(model.predict([X1_train,X2_train,X3_train]))
+        valiPredict = scalerY.inverse_transform(model.predict([X1_vali,X2_vali,X3_vali]))
+
+        trainScore = np.sqrt(mean_squared_error(trainPredict, scalerY.inverse_transform(Y_train)))
+        valiScore = np.sqrt(mean_squared_error(valiPredict, scalerY.inverse_transform(Y_vali)))
+        train_scores.append(trainScore)
+        vali_scores.append(valiScore)
+
+        print('Fold: %d' % (i))
+        print('Train Score: %.4f rmse' % (trainScore))
+        print('Vali Score: %.4f rmse' % (valiScore))
+
+    print('Mean train score: %.4f rmse' %(np.mean(train_scores)))
+    print('Mean vali score: %.4f rmse' % (np.mean(vali_scores)))
+
+    # refit
+    model = create_model(dense_shape=(X1_all.shape[1],),
+                         year_seq_shape=(X2_all.shape[1], X2_all.shape[2]),
+                         month_seq_shape=(X3_all.shape[1], X3_all.shape[2]))
+
+    model.fit([X1_all, X2_all, X3_all], [Y_all], epochs=NUM_EPOCH, batch_size=BATCH_SIZE, verbose=2)
 
     # totallY = np.vstack((trainPredict,valiPredict))
     # inversedY = scalerY.inverse_transform(totallY)
@@ -165,10 +219,10 @@ if __name__ == '__main__':
 
 
 
-    testPredict = model.predict([X1_test,X2_train,X3_test])
+    testPredict = model.predict([X1_test,X2_test,X3_test])
     testPredict = scalerY.inverse_transform(testPredict)
 
-    sub = pd.read_csv('../data/yancheng_testA_20171225.csv')
+    sub = load_test_data(base_path='data/')
     sub.predict_quantity = np.reshape(testPredict,(testPredict.shape[0]))
     timestamp = datetime.datetime.now().strftime('%m%d%H%M')
-    sub.to_csv('../sub/lstm_y'+str(YEAR_SEQ_LEN)+'m'+str(MONTH_SEQ_LEN)+'_'+'e'+str(NUM_EPOCH)+'b'+str(BATCH_SIZE)+'_'+timestamp+'.csv',index=False)
+    sub.to_csv('sub/lstm_y'+str(YEAR_SEQ_LEN)+'m'+str(MONTH_SEQ_LEN)+'_'+'e'+str(NUM_EPOCH)+'b'+str(BATCH_SIZE)+'_'+timestamp+'.csv',index=False)
