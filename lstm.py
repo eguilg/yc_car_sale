@@ -3,7 +3,7 @@ import pandas as pd
 import datetime
 from keras.models import Model
 from keras.layers import Input,Dense,LSTM,Masking,Merge
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import MinMaxScaler, FunctionTransformer
 from sklearn.metrics import mean_squared_error
 
 from feature.time_series import load_train_time_series, load_test_time_series
@@ -113,11 +113,14 @@ if __name__ == '__main__':
     scalerX2 = MinMaxScaler(feature_range=(0, 1))
     scalerX3 = MinMaxScaler(feature_range=(0, 1))
     scalerY = MinMaxScaler(feature_range=(0, 1))
+    lg1p_transformer = FunctionTransformer(func=np.log1p,inverse_func=np.expm1)
 
     X1_all = scalerX1.fit_transform(X1_all)
     X2_all = scalerX2.fit_transform(X2_all)
     X3_all = scalerX3.fit_transform(X3_all)
+    Y_all = lg1p_transformer.fit_transform(np.reshape(Y_all,(-1,1)))
     Y_all = scalerY.fit_transform(np.reshape(Y_all,(-1,1)))
+
 
     X1_test = scalerX1.transform(X1_test)
     X2_test = scalerX2.transform(X2_test)
@@ -167,8 +170,9 @@ if __name__ == '__main__':
         model.fit([X1_train,X2_train,X3_train], [Y_train], epochs=NUM_EPOCH, batch_size=BATCH_SIZE, shuffle=True, verbose=1)
 
         trainPredict = scalerY.inverse_transform(model.predict([X1_train,X2_train,X3_train]))
+        trainPredict = lg1p_transformer.inverse_transform(trainPredict)
         valiPredict = scalerY.inverse_transform(model.predict([X1_vali,X2_vali,X3_vali]))
-
+        valiPredict = lg1p_transformer.inverse_transform(valiPredict)
         trainScore = np.sqrt(mean_squared_error(trainPredict, scalerY.inverse_transform(Y_train)))
         valiScore = np.sqrt(mean_squared_error(valiPredict, scalerY.inverse_transform(Y_vali)))
         train_scores.append(trainScore)
@@ -219,6 +223,7 @@ if __name__ == '__main__':
 
     testPredict = model.predict([X1_test,X2_test,X3_test])
     testPredict = scalerY.inverse_transform(testPredict)
+    testPredict = lg1p_transformer.inverse_transform(testPredict)
 
     sub = load_test_data(base_path='data/')
     sub.predict_quantity = np.reshape(testPredict,(testPredict.shape[0]))
