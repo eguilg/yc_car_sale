@@ -15,7 +15,7 @@ def create_model(dense_shape,year_seq_shape,month_seq_shape,
                  seq_size = 64, final_dense_size = 32):
 
     class_dense_input = Input(shape=dense_shape, name='dense_input')
-    class_dense_out = Dense(seq_size)(class_dense_input, name='class_dense')
+    class_dense_out = Dense(seq_size, name='class_dense')(class_dense_input)
 
     year_seq_input = Input(shape=year_seq_shape, name='year_seq_input')
     year_seq_mask = Masking(mask_value=-1, input_shape=year_seq_shape,
@@ -25,20 +25,21 @@ def create_model(dense_shape,year_seq_shape,month_seq_shape,
 
     month_seq_input = Input(shape=month_seq_shape, name='month_seq_input')
     month_seq_mask = Masking(mask_value=-1, input_shape=month_seq_shape,
-                             name='year_seq_mask')(month_seq_input)
+                             name='month_seq_mask')(month_seq_input)
     month_seq_out = LSTM(seq_size, input_shape=month_seq_shape,
                          dropout_W=0.2, dropout_U=0.2, name='month_seq')(month_seq_mask)
 
-    seq_merge = Merge(layers=[year_seq_out, month_seq_out], name='seq_merge')
-    final_merge = Merge(layers=[class_dense_out, seq_merge], name='final_merge')
+    seq_merge = Merge(name='seq_merge')([year_seq_out, month_seq_out],)
+    final_merge = Merge(name='final_merge')([class_dense_out, seq_merge])
 
-    final_dense = Dense(final_dense_size)(final_merge)
-    main_out = Dense(1)(final_dense)
+    final_dense = Dense(final_dense_size,name='final_dense')(final_merge)
+    main_out = Dense(1,name='main_out')(final_dense)
 
     model = Model(inputs=[class_dense_input, year_seq_input, month_seq_input],
                   outputs=[main_out])
-    model.compile(optimizer='adam', loss='mean_square_loss')
+    model.compile(optimizer='adam', loss='mean_squared_error')
     model.summary()
+
     return model
 
 def _scorer(ground_truth, pred):
@@ -125,23 +126,15 @@ if __name__ == '__main__':
     X3_test = np.reshape(X3_test, (X3_test.shape[0], YEAR_SEQ_LEN, int(X3_test.shape[1] / YEAR_SEQ_LEN)))
     # create and fit the LSTM network
 
-    model = KerasRegressor(build_fn=create_model, nb_epoch=NUM_EPOCH, batch_size=BATCH_SIZE, verbose=2)
+    # model = KerasRegressor(build_fn=create_model, nb_epoch=NUM_EPOCH, batch_size=BATCH_SIZE)
 
-    grid = dict(
-        dense_shape=[(X1_train.shape[1])],
-        year_seq_shape = [(X2_train.shape[1], X2_train.shape[2])],
-        month_seq_shape = [(X3_train.shape[1], X2_train.shape[2])],
-        seq_size = [32,64,128],
-        final_dense_size = [32,64,128]
-    )
-    grid = GridSearchCV(estimator=model, param_grid=grid, n_jobs=-1,cv=6,refit=True,
-                        scoring=make_scorer(_scorer,greater_is_better=False))
+    model = create_model(dense_shape=(X1_train.shape[1],),
+                         year_seq_shape=(X2_train.shape[1],X2_train.shape[2]),
+                         month_seq_shape=(X3_train.shape[1],X3_train.shape[2]))
 
-    cv = grid.fit((X1_train,X2_train,X3_train), (Y_train))
-    # model.fit([X1_train,X2_train,X3_train], [Y_train], epochs=NUM_EPOCH, batch_size=BATCH_SIZE, verbose=2)
-    # make predictions
-    # trainPredict = model.predict(trainX)
-    # valiPredict = model.predict(valiX)
+
+    model.fit([X1_train,X2_train,X3_train], [Y_train], epochs=NUM_EPOCH, batch_size=BATCH_SIZE, verbose=2)
+
 
     # totallY = np.vstack((trainPredict,valiPredict))
     # inversedY = scalerY.inverse_transform(totallY)
@@ -172,7 +165,7 @@ if __name__ == '__main__':
 
 
 
-    testPredict = cv.predict([X1_test,X2_train,X3_test])
+    testPredict = model.predict([X1_test,X2_train,X3_test])
     testPredict = scalerY.inverse_transform(testPredict)
 
     sub = pd.read_csv('../data/yancheng_testA_20171225.csv')
