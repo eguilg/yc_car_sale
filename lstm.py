@@ -3,6 +3,7 @@ import pandas as pd
 import datetime
 from keras.models import Model
 from keras.layers import Input,Dense,LSTM,Masking,Merge
+from keras.optimizers import Adam, SGD
 from sklearn.preprocessing import MinMaxScaler, FunctionTransformer
 from sklearn.metrics import mean_squared_error
 
@@ -11,7 +12,8 @@ from util.load_data import load_test_data
 
 
 def create_model(dense_shape,year_seq_shape,month_seq_shape,
-                 seq_size = 64, final_dense_size = 32):
+                 seq_size = 64, final_dense_size = 32,
+                 lr = 0.1, decay = 1e-5):
 
     class_dense_input = Input(shape=dense_shape, name='dense_input')
     class_dense_out = Dense(seq_size, name='class_dense')(class_dense_input)
@@ -36,6 +38,7 @@ def create_model(dense_shape,year_seq_shape,month_seq_shape,
 
     model = Model(inputs=[class_dense_input, year_seq_input, month_seq_input],
                   outputs=[main_out])
+    sgd = SGD(lr, decay)
     model.compile(optimizer='adam', loss='mean_squared_error')
     model.summary()
 
@@ -68,6 +71,8 @@ if __name__ == '__main__':
 
     NUM_EPOCH = 100
     BATCH_SIZE = 50
+    LR = 0.1
+    DECAY = 1e-5
     sale_quantity, class_feature_train, year_seq_train, month_seq_train = load_train_time_series(lb_year=YEAR_SEQ_LEN,
                                                                                                  lb_mon=MONTH_SEQ_LEN)
 
@@ -112,14 +117,14 @@ if __name__ == '__main__':
     scalerX1 = MinMaxScaler(feature_range=(0, 1))
     scalerX2 = MinMaxScaler(feature_range=(0, 1))
     scalerX3 = MinMaxScaler(feature_range=(0, 1))
-    scalerY = MinMaxScaler(feature_range=(0, 1))
+    #scalerY = MinMaxScaler(feature_range=(0, 1))
     lg1p_transformer = FunctionTransformer(func=np.log1p,inverse_func=np.expm1)
 
     X1_all = scalerX1.fit_transform(X1_all)
     X2_all = scalerX2.fit_transform(X2_all)
     X3_all = scalerX3.fit_transform(X3_all)
     Y_all = lg1p_transformer.fit_transform(np.reshape(Y_all,(-1,1)))
-#    Y_all = scalerY.fit_transform(np.reshape(Y_all,(-1,1)))
+    #Y_all = scalerY.fit_transform(np.reshape(Y_all,(-1,1)))
 
 
     X1_test = scalerX1.transform(X1_test)
@@ -164,13 +169,14 @@ if __name__ == '__main__':
         Y_vali = Y_all[vali_index]
         model = create_model(dense_shape=(X1_train.shape[1],),
                              year_seq_shape=(X2_train.shape[1],X2_train.shape[2]),
-                             month_seq_shape=(X3_train.shape[1],X3_train.shape[2]))
+                             month_seq_shape=(X3_train.shape[1],X3_train.shape[2]),
+                             lr=LR,decay=DECAY)
 
 
         model.fit([X1_train,X2_train,X3_train], [Y_train], epochs=NUM_EPOCH, batch_size=BATCH_SIZE, shuffle=True, verbose=1)
 
         trainPredict = model.predict([X1_train,X2_train,X3_train])
-	#trainPredict = scalerY.inverse_transform(trainPredict)
+        #trainPredict = scalerY.inverse_transform(trainPredict)
         trainPredict = lg1p_transformer.inverse_transform(trainPredict)
         valiPredict = model.predict([X1_vali,X2_vali,X3_vali])
         #valiPredict = scalerY.inverse_transform(valiPredict)
@@ -190,7 +196,8 @@ if __name__ == '__main__':
     # refit
     model = create_model(dense_shape=(X1_all.shape[1],),
                          year_seq_shape=(X2_all.shape[1], X2_all.shape[2]),
-                         month_seq_shape=(X3_all.shape[1], X3_all.shape[2]))
+                         month_seq_shape=(X3_all.shape[1], X3_all.shape[2]),
+                         lr=LR,decay=DECAY)
 
     model.fit([X1_all, X2_all, X3_all], [Y_all], epochs=int(5*NUM_EPOCH/6), batch_size=BATCH_SIZE, shuffle=True, verbose=1)
 
