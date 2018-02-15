@@ -63,11 +63,11 @@ def cross_validation(sample_num, cv, seed):
 
 if __name__ == '__main__':
 
-    YEAR_SEQ_LEN = 3
-    MONTH_SEQ_LEN = 6
+    YEAR_SEQ_LEN = 2
+    MONTH_SEQ_LEN = 11
 
-    NUM_EPOCH = 500
-    BATCH_SIZE = 200
+    NUM_EPOCH = 100
+    BATCH_SIZE = 50
     sale_quantity, class_feature_train, year_seq_train, month_seq_train = load_train_time_series(lb_year=YEAR_SEQ_LEN,
                                                                                                  lb_mon=MONTH_SEQ_LEN)
 
@@ -135,10 +135,10 @@ if __name__ == '__main__':
 
     # reshape input to be [samples, time steps, features]
     X2_all = np.reshape(X2_all, (X2_all.shape[0], YEAR_SEQ_LEN,int(X2_all.shape[1] / YEAR_SEQ_LEN)))
-    X3_all = np.reshape(X3_all, (X3_all.shape[0],YEAR_SEQ_LEN,int(X3_all.shape[1] / YEAR_SEQ_LEN)))
+    X3_all = np.reshape(X3_all, (X3_all.shape[0],MONTH_SEQ_LEN,int(X3_all.shape[1] / MONTH_SEQ_LEN)))
 
     X2_test = np.reshape(X2_test, (X2_test.shape[0], YEAR_SEQ_LEN, int(X2_test.shape[1] / YEAR_SEQ_LEN)))
-    X3_test = np.reshape(X3_test, (X3_test.shape[0], YEAR_SEQ_LEN, int(X3_test.shape[1] / YEAR_SEQ_LEN)))
+    X3_test = np.reshape(X3_test, (X3_test.shape[0], MONTH_SEQ_LEN, int(X3_test.shape[1] / MONTH_SEQ_LEN)))
     # create and fit the LSTM network
 
     # model = KerasRegressor(build_fn=create_model, nb_epoch=NUM_EPOCH, batch_size=BATCH_SIZE)
@@ -164,7 +164,7 @@ if __name__ == '__main__':
                              month_seq_shape=(X3_train.shape[1],X3_train.shape[2]))
 
 
-        model.fit([X1_train,X2_train,X3_train], [Y_train], epochs=NUM_EPOCH, batch_size=BATCH_SIZE, verbose=1)
+        model.fit([X1_train,X2_train,X3_train], [Y_train], epochs=NUM_EPOCH, batch_size=BATCH_SIZE, shuffle=True, verbose=1)
 
         trainPredict = scalerY.inverse_transform(model.predict([X1_train,X2_train,X3_train]))
         valiPredict = scalerY.inverse_transform(model.predict([X1_vali,X2_vali,X3_vali]))
@@ -186,7 +186,7 @@ if __name__ == '__main__':
                          year_seq_shape=(X2_all.shape[1], X2_all.shape[2]),
                          month_seq_shape=(X3_all.shape[1], X3_all.shape[2]))
 
-    model.fit([X1_all, X2_all, X3_all], [Y_all], epochs=NUM_EPOCH, batch_size=BATCH_SIZE, verbose=2)
+    model.fit([X1_all, X2_all, X3_all], [Y_all], epochs=int(5*NUM_EPOCH/6), batch_size=BATCH_SIZE, shuffle=True, verbose=1)
 
     # totallY = np.vstack((trainPredict,valiPredict))
     # inversedY = scalerY.inverse_transform(totallY)
