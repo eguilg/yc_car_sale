@@ -1,7 +1,5 @@
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import math
 import datetime
 from keras.models import Model
 from keras.layers import Input,Dense,LSTM,Masking,Merge,Concatenate
@@ -11,7 +9,6 @@ from sklearn.metrics import mean_squared_error
 from sklearn.metrics import make_scorer
 from sklearn.model_selection import GridSearchCV
 from feature.time_series import load_train_time_series, load_test_time_series
-# convert an array of values into a dataset matrix
 
 
 def create_model(dense_shape,year_seq_shape,month_seq_shape,
@@ -54,10 +51,10 @@ if __name__ == '__main__':
     NUM_EPOCH = 500
     BATCH_SIZE = 300
     sale_quantity, class_feature_train, year_seq_train, month_seq_train = load_train_time_series(lb_year=YEAR_SEQ_LEN,
-                                                                               lb_mon=MONTH_SEQ_LEN)
+                                                                                                 lb_mon=MONTH_SEQ_LEN)
 
     class_feature_test, year_seq_test, month_seq_test =load_test_time_series(lb_year=YEAR_SEQ_LEN,
-                                                                               lb_mon=MONTH_SEQ_LEN)
+                                                                             lb_mon=MONTH_SEQ_LEN)
     # fix random seed for reproducibility
     np.random.seed(7)
     # load the dataset
@@ -66,10 +63,31 @@ if __name__ == '__main__':
     X1_train = class_feature_train
     X2_train = year_seq_train
     X3_train = month_seq_train
+
+    # X1_train_filter = class_feature_train != class_feature_train
+    X2_train_filter = year_seq_train != year_seq_train
+    X3_train_filter = month_seq_train != month_seq_train
+
+    X2_train_min = X2_train.min(axis=0)
+    X2_train_min.fillna(-1,inplace =True)
+    X2_train.fillna(X2_train_min,inplace=True)
+    X3_train_min = X3_train.min(axis=0)
+    X3_train_min.fillna(-1, inplace=True)
+    X3_train.fillna(X3_train_min, inplace = True)
     print(X1_train.shape,X2_train.shape,X3_train.shape)
     X1_test = class_feature_test
     X2_test = year_seq_test
     X3_test = month_seq_test
+
+    X2_test_filter = year_seq_test != year_seq_test
+    X3_test_filter = month_seq_test != month_seq_test
+
+    X2_test_min = X2_test.min(axis=0)
+    X2_test_min.fillna(-1, inplace=True)
+    X2_test.fillna(X2_test_min,inplace=True)
+    X3_test_min = X3_test.min(axis=0)
+    X3_test_min.fillna(-1,inplace=True)
+    X3_test.fillna(X3_test_min,inplace=True)
     print(X1_test.shape, X2_test.shape, X3_test.shape)
 
     # normalize the dataset
@@ -86,11 +104,17 @@ if __name__ == '__main__':
     X1_test = scalerX1.transform(X1_test)
     X2_test = scalerX2.transform(X2_test)
     X3_test = scalerX3.transform(X3_test)
-    # split into train and vali sets
-    # train_size = int(len(X1_train) * 0.80)
-    # vali_size = len(X1_train) - train_size
-    # trainX, valiX = X[0:train_size,:], X[train_size:len(X),:]
-    # trainY, valiY = Y[0:train_size,:], Y[train_size:len(Y),:]
+
+    X2_train[X2_train_filter] = -1
+    X3_train[X3_train_filter] = -1
+    X2_test[X2_test_filter] = -1
+    X3_test[X3_test_filter] = -1
+
+    X2_train_filter = None
+    X3_train_filter = None
+    X2_test_filter = None
+    X3_test_filter = None
+
 
 
     # reshape input to be [samples, time steps, features]

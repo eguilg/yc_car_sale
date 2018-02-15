@@ -42,7 +42,7 @@ def __load_time_series_features(base_path, lb_num = 3,lb_year=True,test=True):
            +( (lambda x: 'y' if x == True else 'm')(lb_year))+str(lb_num)+'_features.csv'
 
     if os.path.exists(path):
-        return pd.read_csv(path)
+        return pd.read_csv(path,na_values='-')
     else:
         preprocessed_data = load_preprocessed_data(base_path)
 
@@ -68,8 +68,8 @@ def __load_time_series_features(base_path, lb_num = 3,lb_year=True,test=True):
             if t_index.sum() == 1:
                 res_sq.loc[item_index, :] = preprocessed_data.loc[t_index, equipment_columns].values[0]
             else:
-                res_sq.loc[item_index, :] = [-1 for i in range(len(equipment_columns))]
-        res_sq.to_csv(path,index=False)
+                res_sq.loc[item_index, :] = [None for i in range(len(equipment_columns))]
+        res_sq.to_csv(path,index=False,na_rep='-')
         return res_sq
 
 def load_train_time_series(base_path = 'data/',lb_year=3,lb_mon=3):
