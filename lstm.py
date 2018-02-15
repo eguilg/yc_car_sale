@@ -2,12 +2,10 @@ import numpy as np
 import pandas as pd
 import datetime
 from keras.models import Model
-from keras.layers import Input,Dense,LSTM,Masking,Merge,Concatenate
-from keras.wrappers.scikit_learn import KerasRegressor
+from keras.layers import Input,Dense,LSTM,Masking,Merge
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error
-from sklearn.metrics import make_scorer
-from sklearn.model_selection import GridSearchCV
+
 from feature.time_series import load_train_time_series, load_test_time_series
 from util.load_data import load_test_data
 
@@ -68,8 +66,8 @@ if __name__ == '__main__':
     YEAR_SEQ_LEN = 3
     MONTH_SEQ_LEN = 6
 
-    NUM_EPOCH = 10
-    BATCH_SIZE = 300
+    NUM_EPOCH = 500
+    BATCH_SIZE = 200
     sale_quantity, class_feature_train, year_seq_train, month_seq_train = load_train_time_series(lb_year=YEAR_SEQ_LEN,
                                                                                                  lb_mon=MONTH_SEQ_LEN)
 
