@@ -119,7 +119,7 @@ if __name__ == '__main__':
     X2_all = scalerX2.fit_transform(X2_all)
     X3_all = scalerX3.fit_transform(X3_all)
     Y_all = lg1p_transformer.fit_transform(np.reshape(Y_all,(-1,1)))
-    Y_all = scalerY.fit_transform(np.reshape(Y_all,(-1,1)))
+#    Y_all = scalerY.fit_transform(np.reshape(Y_all,(-1,1)))
 
 
     X1_test = scalerX1.transform(X1_test)
@@ -169,12 +169,14 @@ if __name__ == '__main__':
 
         model.fit([X1_train,X2_train,X3_train], [Y_train], epochs=NUM_EPOCH, batch_size=BATCH_SIZE, shuffle=True, verbose=1)
 
-        trainPredict = scalerY.inverse_transform(model.predict([X1_train,X2_train,X3_train]))
+        trainPredict = model.predict([X1_train,X2_train,X3_train])
+	#trainPredict = scalerY.inverse_transform(trainPredict)
         trainPredict = lg1p_transformer.inverse_transform(trainPredict)
-        valiPredict = scalerY.inverse_transform(model.predict([X1_vali,X2_vali,X3_vali]))
+        valiPredict = model.predict([X1_vali,X2_vali,X3_vali])
+        #valiPredict = scalerY.inverse_transform(valiPredict)
         valiPredict = lg1p_transformer.inverse_transform(valiPredict)
-        trainScore = np.sqrt(mean_squared_error(trainPredict, scalerY.inverse_transform(Y_train)))
-        valiScore = np.sqrt(mean_squared_error(valiPredict, scalerY.inverse_transform(Y_vali)))
+        trainScore = np.sqrt(mean_squared_error(trainPredict, lg1p_transformer.inverse_transform(Y_train)))
+        valiScore = np.sqrt(mean_squared_error(valiPredict, lg1p_transformer.inverse_transform(Y_vali)))
         train_scores.append(trainScore)
         vali_scores.append(valiScore)
 
@@ -222,7 +224,7 @@ if __name__ == '__main__':
 
 
     testPredict = model.predict([X1_test,X2_test,X3_test])
-    testPredict = scalerY.inverse_transform(testPredict)
+    #testPredict = scalerY.inverse_transform(testPredict)
     testPredict = lg1p_transformer.inverse_transform(testPredict)
 
     sub = load_test_data(base_path='data/')
