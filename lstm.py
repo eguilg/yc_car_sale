@@ -1,15 +1,20 @@
 import numpy as np
 import pandas as pd
 import datetime
+import keras
 from keras.models import Model
-from keras.layers import Input,Dense,LSTM,Masking,Merge
+from keras.layers import Input,Dense,LSTM,Masking,Merge,Dropout
 from keras.optimizers import Adam, SGD
+from keras import backend as K
 from sklearn.preprocessing import MinMaxScaler, FunctionTransformer
 from sklearn.metrics import mean_squared_error
 
 from feature.time_series import load_train_time_series, load_test_time_series
 from util.load_data import load_test_data
 
+def rmse_loss(ground_truth, pred):
+    # return mean_squared_error(ground_truth, pred)
+    return K.sqrt(K.mean(K.square(ground_truth-pred),axis=-1))
 
 def create_model(dense_shape,year_seq_shape,month_seq_shape,
                  seq_size = 64, final_dense_size = 32,
@@ -22,31 +27,31 @@ def create_model(dense_shape,year_seq_shape,month_seq_shape,
     year_seq_mask = Masking(mask_value=-1, input_shape=year_seq_shape,
                             name='year_seq_mask')(year_seq_input)
     year_seq_out = LSTM(seq_size, input_shape=year_seq_shape,
-                        dropout_W=0.2, dropout_U=0.2, name='year_seq')(year_seq_mask)
+                        dropout_W=0.1, dropout_U=0.1, name='year_seq')(year_seq_mask)
 
     month_seq_input = Input(shape=month_seq_shape, name='month_seq_input')
     month_seq_mask = Masking(mask_value=-1, input_shape=month_seq_shape,
                              name='month_seq_mask')(month_seq_input)
     month_seq_out = LSTM(seq_size, input_shape=month_seq_shape,
-                         dropout_W=0.2, dropout_U=0.2, name='month_seq')(month_seq_mask)
+                         dropout_W=0.1, dropout_U=0.1, name='month_seq')(month_seq_mask)
 
-    seq_merge = Merge(name='seq_merge')([year_seq_out, month_seq_out],)
-    final_merge = Merge(name='final_merge')([class_dense_out, seq_merge])
+    seq_merge = Merge(name='seq_merge', mode = 'ave')([year_seq_out, month_seq_out])
+    final_merge = Merge(name='final_merge',mode='concat')([class_dense_out, seq_merge])
 
     final_dense = Dense(final_dense_size,name='final_dense')(final_merge)
-    main_out = Dense(1,name='main_out')(final_dense)
+    drop_out = Dropout(0.1)(final_dense)
+    main_out = Dense(1,name='main_out',activation='softplus')(drop_out)
 
     model = Model(inputs=[class_dense_input, year_seq_input, month_seq_input],
                   outputs=[main_out])
-    sgd = SGD(lr, decay)
-    model.compile(optimizer='adam', loss='mean_squared_error')
+
+
+    model.compile(optimizer='adam', loss=rmse_loss)
     model.summary()
 
     return model
 
-def _scorer(ground_truth, pred):
-    return mean_squared_error(ground_truth, pred)
-    # return mean_squared_error(np.expm1(ground_truth), np.expm1(pred))
+
 
 def cross_validation(sample_num, cv, seed):
 
@@ -66,10 +71,10 @@ def cross_validation(sample_num, cv, seed):
 
 if __name__ == '__main__':
 
-    YEAR_SEQ_LEN = 2
+    YEAR_SEQ_LEN = 3
     MONTH_SEQ_LEN = 11
 
-    NUM_EPOCH = 100
+    NUM_EPOCH = 200
     BATCH_SIZE = 50
     LR = 0.1
     DECAY = 1e-5
@@ -118,13 +123,14 @@ if __name__ == '__main__':
     scalerX2 = MinMaxScaler(feature_range=(0, 1))
     scalerX3 = MinMaxScaler(feature_range=(0, 1))
     #scalerY = MinMaxScaler(feature_range=(0, 1))
-    lg1p_transformer = FunctionTransformer(func=np.log1p,inverse_func=np.expm1)
+    # lg1p_transformer = FunctionTransformer(func=np.log1p,inverse_func=np.expm1)
 
     X1_all = scalerX1.fit_transform(X1_all)
     X2_all = scalerX2.fit_transform(X2_all)
     X3_all = scalerX3.fit_transform(X3_all)
-    Y_all = lg1p_transformer.fit_transform(np.reshape(Y_all,(-1,1)))
-    #Y_all = scalerY.fit_transform(np.reshape(Y_all,(-1,1)))
+    Y_all = np.reshape(Y_all,(-1,1))
+    # Y_all = lg1p_transformer.fit_transform(Y_all)
+    #Y_all = scalerY.fit_transform(Y_all)
 
 
     X1_test = scalerX1.transform(X1_test)
@@ -173,16 +179,19 @@ if __name__ == '__main__':
                              lr=LR,decay=DECAY)
 
 
-        model.fit([X1_train,X2_train,X3_train], [Y_train], epochs=NUM_EPOCH, batch_size=BATCH_SIZE, shuffle=True, verbose=1)
+        history = model.fit([X1_train,X2_train,X3_train], [Y_train], validation_data=([X1_vali,X2_vali,X3_vali],[Y_vali]),
+                  epochs=NUM_EPOCH, batch_size=BATCH_SIZE, shuffle=True, verbose=1)
+        keras.callbacks.EarlyStopping(monitor='val_loss',patience=5,verbose=1,min_delta=2)
 
-        trainPredict = model.predict([X1_train,X2_train,X3_train])
+
+        # trainPredict = model.predict([X1_train,X2_train,X3_train])
         #trainPredict = scalerY.inverse_transform(trainPredict)
-        trainPredict = lg1p_transformer.inverse_transform(trainPredict)
-        valiPredict = model.predict([X1_vali,X2_vali,X3_vali])
+        # trainPredict = lg1p_transformer.inverse_transform(trainPredict)
+        # valiPredict = model.predict([X1_vali,X2_vali,X3_vali])
         #valiPredict = scalerY.inverse_transform(valiPredict)
-        valiPredict = lg1p_transformer.inverse_transform(valiPredict)
-        trainScore = np.sqrt(mean_squared_error(trainPredict, lg1p_transformer.inverse_transform(Y_train)))
-        valiScore = np.sqrt(mean_squared_error(valiPredict, lg1p_transformer.inverse_transform(Y_vali)))
+        # valiPredict = lg1p_transformer.inverse_transform(valiPredict)
+        trainScore = history.history['loss'][-1]
+        valiScore = history.history['val_loss'][-1]
         train_scores.append(trainScore)
         vali_scores.append(valiScore)
 
@@ -200,7 +209,7 @@ if __name__ == '__main__':
                          lr=LR,decay=DECAY)
 
     model.fit([X1_all, X2_all, X3_all], [Y_all], epochs=int(5*NUM_EPOCH/6), batch_size=BATCH_SIZE, shuffle=True, verbose=1)
-
+    keras.callbacks.EarlyStopping(monitor='val_loss', patience=5, verbose=1, min_delta=2)
     # totallY = np.vstack((trainPredict,valiPredict))
     # inversedY = scalerY.inverse_transform(totallY)
     #
@@ -232,7 +241,7 @@ if __name__ == '__main__':
 
     testPredict = model.predict([X1_test,X2_test,X3_test])
     #testPredict = scalerY.inverse_transform(testPredict)
-    testPredict = lg1p_transformer.inverse_transform(testPredict)
+    # testPredict = lg1p_transformer.inverse_transform(testPredict)
 
     sub = load_test_data(base_path='data/')
     sub.predict_quantity = np.reshape(testPredict,(testPredict.shape[0]))
