@@ -5,6 +5,7 @@ import keras
 from keras.models import Model
 from keras.layers import Input,Dense,LSTM,Masking,Merge,Dropout
 from keras.optimizers import Adam, SGD
+from keras.callbacks import ReduceLROnPlateau,EarlyStopping,CSVLogger
 from keras import backend as K
 from sklearn.preprocessing import MinMaxScaler, FunctionTransformer
 from sklearn.metrics import mean_squared_error
@@ -45,8 +46,8 @@ def create_model(dense_shape,year_seq_shape,month_seq_shape,
     model = Model(inputs=[class_dense_input, year_seq_input, month_seq_input],
                   outputs=[main_out])
 
-
-    model.compile(optimizer='adam', loss=rmse_loss)
+    adam = Adam()
+    model.compile(optimizer=adam, loss=rmse_loss)
     model.summary()
 
     return model
@@ -78,15 +79,18 @@ if __name__ == '__main__':
     BATCH_SIZE = 50
     LR = 0.1
     DECAY = 1e-5
+    CV = 6
+
+    timestamp = datetime.datetime.now().strftime('%m%d%H%M')
+    model_name = 'lstm_y' + str(YEAR_SEQ_LEN) + 'm' + str(MONTH_SEQ_LEN) + '_' + 'e' \
+                 + str(NUM_EPOCH) + 'b' + str(BATCH_SIZE) + '_' + timestamp
+
     sale_quantity, class_feature_train, year_seq_train, month_seq_train = load_train_time_series(lb_year=YEAR_SEQ_LEN,
                                                                                                  lb_mon=MONTH_SEQ_LEN)
 
     class_feature_test, year_seq_test, month_seq_test =load_test_time_series(lb_year=YEAR_SEQ_LEN,
                                                                              lb_mon=MONTH_SEQ_LEN)
-    # fix random seed for reproducibility
-    # np.random.seed(7)
-    # load the dataset
-    # dataframe = read_csv('international-airline-passengers.csv', usecols=[1], engine='python', skipfooter=3)
+
     Y_all = sale_quantity
     X1_all = class_feature_train
     X2_all = year_seq_train
@@ -122,15 +126,13 @@ if __name__ == '__main__':
     scalerX1 = MinMaxScaler(feature_range=(0, 1))
     scalerX2 = MinMaxScaler(feature_range=(0, 1))
     scalerX3 = MinMaxScaler(feature_range=(0, 1))
-    #scalerY = MinMaxScaler(feature_range=(0, 1))
-    # lg1p_transformer = FunctionTransformer(func=np.log1p,inverse_func=np.expm1)
+
 
     X1_all = scalerX1.fit_transform(X1_all)
     X2_all = scalerX2.fit_transform(X2_all)
     X3_all = scalerX3.fit_transform(X3_all)
     Y_all = np.reshape(Y_all,(-1,1))
-    # Y_all = lg1p_transformer.fit_transform(Y_all)
-    #Y_all = scalerY.fit_transform(Y_all)
+
 
 
     X1_test = scalerX1.transform(X1_test)
@@ -155,10 +157,10 @@ if __name__ == '__main__':
     X3_test = np.reshape(X3_test, (X3_test.shape[0], MONTH_SEQ_LEN, int(X3_test.shape[1] / MONTH_SEQ_LEN)))
     # create and fit the LSTM network
 
-    # model = KerasRegressor(build_fn=create_model, nb_epoch=NUM_EPOCH, batch_size=BATCH_SIZE)
-    folds = cross_validation(X1_all.shape[0],6,seed=12)
+    folds = cross_validation(X1_all.shape[0],CV,seed=12)
     train_scores = []
     vali_scores = []
+    test_predicts = []
     for i in range(len(folds)):
 
         train_index = folds[i]['train']
@@ -173,43 +175,43 @@ if __name__ == '__main__':
         X2_vali = X2_all[vali_index]
         X3_vali = X3_all[vali_index]
         Y_vali = Y_all[vali_index]
+
         model = create_model(dense_shape=(X1_train.shape[1],),
                              year_seq_shape=(X2_train.shape[1],X2_train.shape[2]),
                              month_seq_shape=(X3_train.shape[1],X3_train.shape[2]),
                              lr=LR,decay=DECAY)
 
+        logger = CSVLogger('log/'+model_name+'_cv'+str(i)+'.csv')
+        earlystop = EarlyStopping(monitor='val_loss', patience=10, verbose=1, min_delta=0.1)
+        reduce = ReduceLROnPlateau(monitor='val_loss', factor=0.4, patience=4,verbose=1)
+        history = model.fit([X1_train,X2_train,X3_train], [Y_train],
+                            validation_data=([X1_vali,X2_vali,X3_vali],[Y_vali]),
+                            callbacks=[earlystop, reduce],
+                            epochs=NUM_EPOCH, batch_size=BATCH_SIZE, shuffle=True, verbose=1)
 
-        history = model.fit([X1_train,X2_train,X3_train], [Y_train], validation_data=([X1_vali,X2_vali,X3_vali],[Y_vali]),
-                  epochs=NUM_EPOCH, batch_size=BATCH_SIZE, shuffle=True, verbose=1)
-        keras.callbacks.EarlyStopping(monitor='val_loss',patience=5,verbose=1,min_delta=2)
 
 
-        # trainPredict = model.predict([X1_train,X2_train,X3_train])
-        #trainPredict = scalerY.inverse_transform(trainPredict)
-        # trainPredict = lg1p_transformer.inverse_transform(trainPredict)
-        # valiPredict = model.predict([X1_vali,X2_vali,X3_vali])
-        #valiPredict = scalerY.inverse_transform(valiPredict)
-        # valiPredict = lg1p_transformer.inverse_transform(valiPredict)
+
         trainScore = history.history['loss'][-1]
         valiScore = history.history['val_loss'][-1]
+        cv_testPredict = model.predict([X1_test, X2_test, X3_test])
         train_scores.append(trainScore)
         vali_scores.append(valiScore)
+        test_predicts.append(cv_testPredict)
 
         print('Fold: %d' % (i))
         print('Train Score: %.4f rmse' % (trainScore))
         print('Vali Score: %.4f rmse' % (valiScore))
 
-    print('Mean train score: %.4f rmse' %(np.mean(train_scores)))
-    print('Mean vali score: %.4f rmse' % (np.mean(vali_scores)))
+    mean_trainScore = np.mean(train_scores)
+    mean_valiScore = np.mean(vali_scores)
+    print('Mean train score: %.4f rmse' %(mean_trainScore))
+    print('Mean vali score: %.4f rmse' % (mean_valiScore))
 
-    # refit
-    model = create_model(dense_shape=(X1_all.shape[1],),
-                         year_seq_shape=(X2_all.shape[1], X2_all.shape[2]),
-                         month_seq_shape=(X3_all.shape[1], X3_all.shape[2]),
-                         lr=LR,decay=DECAY)
+    cv_weights = np.average([train_scores,vali_scores],
+                         weights=[CV-1,1],axis=0)
+    mean_test_predict = np.average(test_predicts,axis=0, weights=1/cv_weights)
 
-    model.fit([X1_all, X2_all, X3_all], [Y_all], epochs=int(5*NUM_EPOCH/6), batch_size=BATCH_SIZE, shuffle=True, verbose=1)
-    keras.callbacks.EarlyStopping(monitor='val_loss', patience=5, verbose=1, min_delta=2)
     # totallY = np.vstack((trainPredict,valiPredict))
     # inversedY = scalerY.inverse_transform(totallY)
     #
@@ -237,13 +239,7 @@ if __name__ == '__main__':
     # plt.show()
 
 
-
-
-    testPredict = model.predict([X1_test,X2_test,X3_test])
-    #testPredict = scalerY.inverse_transform(testPredict)
-    # testPredict = lg1p_transformer.inverse_transform(testPredict)
-
     sub = load_test_data(base_path='data/')
-    sub.predict_quantity = np.reshape(testPredict,(testPredict.shape[0]))
-    timestamp = datetime.datetime.now().strftime('%m%d%H%M')
-    sub.to_csv('sub/lstm_y'+str(YEAR_SEQ_LEN)+'m'+str(MONTH_SEQ_LEN)+'_'+'e'+str(NUM_EPOCH)+'b'+str(BATCH_SIZE)+'_'+timestamp+'.csv',index=False)
+    sub.predict_quantity = np.reshape(mean_test_predict,(mean_test_predict.shape[0]))
+
+    sub.to_csv('sub/'+model_name+'_cv'+str(int(mean_valiScore))+'.csv',index=False)
