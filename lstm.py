@@ -72,10 +72,10 @@ def cross_validation(sample_num, cv, seed):
 
 if __name__ == '__main__':
 
-    YEAR_SEQ_LEN = 3
+    YEAR_SEQ_LEN = 5
     MONTH_SEQ_LEN = 11
 
-    NUM_EPOCH = 500
+    NUM_EPOCH = 300
     BATCH_SIZE = 50
     LR = 0.1
     DECAY = 1e-5
@@ -182,8 +182,8 @@ if __name__ == '__main__':
                              lr=LR,decay=DECAY)
 
         logger = CSVLogger('log/'+model_name+'_cv'+str(i)+'.csv')
-        earlystop = EarlyStopping(monitor='val_loss', patience=35, verbose=1, min_delta=1)
-        reduce = ReduceLROnPlateau(monitor='val_loss', factor=0.96, patience=3,verbose=1)
+        earlystop = EarlyStopping(monitor='val_loss', patience=50, verbose=1, min_delta=1)
+        reduce = ReduceLROnPlateau(monitor='val_loss', factor=0.95, patience=3,verbose=1)
         history = model.fit([X1_train,X2_train,X3_train], [Y_train],
                             validation_data=([X1_vali,X2_vali,X3_vali],[Y_vali]),
                             callbacks=[earlystop, reduce, logger],
