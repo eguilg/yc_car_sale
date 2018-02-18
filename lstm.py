@@ -73,7 +73,7 @@ def cross_validation(sample_num, cv, seed):
 if __name__ == '__main__':
 
     YEAR_SEQ_LEN = 5
-    MONTH_SEQ_LEN = 11
+    MONTH_SEQ_LEN = 24
 
     NUM_EPOCH = 300
     BATCH_SIZE = 50
