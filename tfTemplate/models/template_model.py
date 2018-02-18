@@ -1,4 +1,4 @@
-from base.base_model import BaseModel
+from tfTemplate.base.base_model import BaseModel
 import tensorflow as tf
 
 
