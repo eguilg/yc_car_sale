@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 import os
-from preprocess.preprocess import load_preprocessed_data
+from feature.feature_generator import load_full_feature_data
 from util.load_data import load_test_data
 
 
@@ -14,7 +14,7 @@ def __load_class_brand_id_features(base_path='data/',test = True):
     if os.path.exists(path):
         return pd.read_csv(path)
     else:
-        preprocessed_data = load_preprocessed_data(base_path)
+        preprocessed_data = load_full_feature_data(base_path)
         if test:
 
             test_data = load_test_data(base_path)
@@ -44,7 +44,7 @@ def __load_time_series_features(base_path, lb_num = 3,lb_year=True,test=True):
     if os.path.exists(path):
         return pd.read_csv(path,na_values='-')
     else:
-        preprocessed_data = load_preprocessed_data(base_path)
+        preprocessed_data = load_full_feature_data(base_path)
 
         equipment_columns = [col for col in preprocessed_data.columns if
                              col not in not_equipment_columns + ['class_id']]
@@ -88,7 +88,7 @@ def load_train_time_series(base_path = 'data/',lb_year=3,lb_mon=3):
         lb_mon_data = lb_mon_data.join(lb, how='outer', rsuffix='_'+str(i))
 
 
-    y = load_preprocessed_data(base_path)['sale_quantity']
+    y = load_full_feature_data(base_path)['sale_quantity']
 
     return y,class_brand_id,lb_year_data,lb_mon_data
 
