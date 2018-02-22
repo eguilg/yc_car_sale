@@ -244,7 +244,7 @@ def load_preprocessed_data(base_path='../data/',
 
         # one hot encode
         if one_hot:
-            categorical_columns = ['brand_id', 'type_id', 'level_id', 'department_id', 'TR', 'gearbox_type',
+            categorical_columns = ['class_id_encoded','brand_id', 'type_id', 'level_id', 'department_id', 'TR', 'gearbox_type',
                                    'if_charging', 'driven_type_id', 'fuel_type_id', 'newenergy_type_id',
                                    'emission_standards_id', 'if_MPV_id', 'if_luxurious_id']
 
@@ -252,7 +252,7 @@ def load_preprocessed_data(base_path='../data/',
 
         # 生成每个class_id 按月的销售记录(根据销量加权平均)
         data = data.groupby(by=['class_id','time_index'],as_index=False).apply(_gen_data_per_classmonth)
-
+        data.sort_values(by=['time_index'],inplace=True)
         data.to_csv(path,index=False)
 
         print('data preprocess done, result saved.')

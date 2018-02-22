@@ -17,12 +17,11 @@ def rmse_loss(ground_truth, pred):
     # return mean_squared_error(ground_truth, pred)
     return K.sqrt(K.mean(K.square(ground_truth-pred),axis=-1))
 
-def create_model(dense_shape,year_seq_shape,month_seq_shape,
+def create_model(year_seq_shape,month_seq_shape,
                  seq_size = 100, final_dense_size = 32,
                  lr = 0.1, decay = 1e-5):
 
-    class_dense_input = Input(shape=dense_shape, name='dense_input')
-    class_dense_out = Dense(seq_size, name='class_dense')(class_dense_input)
+
 
     year_seq_input = Input(shape=year_seq_shape, name='year_seq_input')
     year_seq_mask = Masking(mask_value=-1, input_shape=year_seq_shape,
@@ -37,13 +36,13 @@ def create_model(dense_shape,year_seq_shape,month_seq_shape,
                          dropout_W=0.1, dropout_U=0.1, name='month_seq')(month_seq_mask)
 
     seq_merge = Merge(name='seq_merge', mode = 'ave')([year_seq_out, month_seq_out])
-    final_merge = Merge(name='final_merge',mode='concat')([class_dense_out, seq_merge])
-    dense_after_merge = Dense(seq_size, name = 'dense_after_merge')(final_merge)
+
+    dense_after_merge = Dense(seq_size, name = 'dense_after_merge')(seq_merge)
     drop_out = Dropout(0.1, name = 'drop_out')(dense_after_merge)
     final_dense = Dense(final_dense_size,name='final_dense')(drop_out)
     main_out = Dense(1,name='main_out',activation='softplus')(final_dense)
 
-    model = Model(inputs=[class_dense_input, year_seq_input, month_seq_input],
+    model = Model(inputs=[ year_seq_input, month_seq_input],
                   outputs=[main_out])
 
     adam = Adam()
@@ -166,26 +165,25 @@ if __name__ == '__main__':
         train_index = folds[i]['train']
         vali_index = folds[i]['vali']
 
-        X1_train = X1_all[train_index]
+        # X1_train = X1_all[train_index]
         X2_train = X2_all[train_index]
         X3_train = X3_all[train_index]
         Y_train = Y_all[train_index]
 
-        X1_vali = X1_all[vali_index]
+        # X1_vali = X1_all[vali_index]
         X2_vali = X2_all[vali_index]
         X3_vali = X3_all[vali_index]
         Y_vali = Y_all[vali_index]
 
-        model = create_model(dense_shape=(X1_train.shape[1],),
-                             year_seq_shape=(X2_train.shape[1],X2_train.shape[2]),
+        model = create_model(year_seq_shape=(X2_train.shape[1],X2_train.shape[2]),
                              month_seq_shape=(X3_train.shape[1],X3_train.shape[2]),
                              lr=LR,decay=DECAY)
 
         logger = CSVLogger('log/'+model_name+'_cv'+str(i)+'.csv')
         earlystop = EarlyStopping(monitor='val_loss', patience=60, verbose=1, min_delta=0.5)
         reduce = ReduceLROnPlateau(monitor='val_loss', factor=0.90, patience=4,verbose=1)
-        history = model.fit([X1_train,X2_train,X3_train], [Y_train],
-                            validation_data=([X1_vali,X2_vali,X3_vali],[Y_vali]),
+        history = model.fit([X2_train,X3_train], [Y_train],
+                            validation_data=([X2_vali,X3_vali],[Y_vali]),
                             callbacks=[earlystop, reduce, logger],
                             epochs=NUM_EPOCH, batch_size=BATCH_SIZE, shuffle=True, verbose=1)
 
@@ -194,7 +192,7 @@ if __name__ == '__main__':
 
         trainScore = history.history['loss'][-1]
         valiScore = history.history['val_loss'][-1]
-        cv_testPredict = model.predict([X1_test, X2_test, X3_test])
+        cv_testPredict = model.predict([X2_test, X3_test])
         train_scores.append(trainScore)
         vali_scores.append(valiScore)
         test_predicts.append(cv_testPredict)

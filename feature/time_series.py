@@ -5,7 +5,7 @@ from feature.feature_generator import load_full_feature_data
 from util.load_data import load_test_data
 
 
-not_equipment_columns = ['class_id_encoded'] + ['brand_id_' + str(m) for m in range(36)]
+not_equipment_columns = []#['class_id_encoded'+ str(m) for m in range(140)] + ['brand_id_' + str(m) for m in range(36)]
 
 def __load_class_brand_id_features(base_path='data/',test = True):
 
