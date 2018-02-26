@@ -73,7 +73,7 @@ if __name__ == '__main__':
 
     YEAR_SEQ_LEN = 5
     MONTH_SEQ_LEN = 24
-
+    MON_DELAY = 2
     NUM_EPOCH = 300
     BATCH_SIZE = 50
     LR = 0.1
@@ -81,14 +81,16 @@ if __name__ == '__main__':
     CV = 6
 
     timestamp = datetime.datetime.now().strftime('%m%d%H%M')
-    model_name = 'lstm_y' + str(YEAR_SEQ_LEN) + 'm' + str(MONTH_SEQ_LEN) + '_' + 'e' \
-                 + str(NUM_EPOCH) + 'b' + str(BATCH_SIZE) + '_' + timestamp
+    model_name = timestamp+'_lstmB_y' + str(YEAR_SEQ_LEN) + 'm' + str(MONTH_SEQ_LEN) + '_' + 'e' \
+                 + str(NUM_EPOCH) + 'b' + str(BATCH_SIZE)
 
     sale_quantity, class_feature_train, year_seq_train, month_seq_train = load_train_time_series(lb_year=YEAR_SEQ_LEN,
-                                                                                                 lb_mon=MONTH_SEQ_LEN)
+                                                                                                 lb_mon=MONTH_SEQ_LEN,
+                                                                                                 mon_delay=MON_DELAY)
 
     class_feature_test, year_seq_test, month_seq_test =load_test_time_series(lb_year=YEAR_SEQ_LEN,
-                                                                             lb_mon=MONTH_SEQ_LEN)
+                                                                             lb_mon=MONTH_SEQ_LEN,
+                                                                             mon_delay=MON_DELAY)
 
     Y_all = sale_quantity
     X1_all = class_feature_train
@@ -134,7 +136,7 @@ if __name__ == '__main__':
 
 
 
-    X1_test = scalerX1.transform(X1_test)
+    # X1_test = scalerX1.transform(X1_test)
     X2_test = scalerX2.transform(X2_test)
     X3_test = scalerX3.transform(X3_test)
 
@@ -156,7 +158,7 @@ if __name__ == '__main__':
     X3_test = np.reshape(X3_test, (X3_test.shape[0], MONTH_SEQ_LEN, int(X3_test.shape[1] / MONTH_SEQ_LEN)))
     # create and fit the LSTM network
 
-    folds = cross_validation(X1_all.shape[0],CV,seed=12)
+    folds = cross_validation(X2_all.shape[0],CV,seed=12)
     train_scores = []
     vali_scores = []
     test_predicts = []
@@ -180,8 +182,8 @@ if __name__ == '__main__':
                              lr=LR,decay=DECAY)
 
         logger = CSVLogger('log/'+model_name+'_cv'+str(i)+'.csv')
-        earlystop = EarlyStopping(monitor='val_loss', patience=60, verbose=1, min_delta=0.5)
-        reduce = ReduceLROnPlateau(monitor='val_loss', factor=0.90, patience=4,verbose=1)
+        earlystop = EarlyStopping(monitor='val_loss', patience=35, verbose=1, min_delta=0.3)
+        reduce = ReduceLROnPlateau(monitor='val_loss', factor=0.80, patience=4,verbose=1)
         history = model.fit([X2_train,X3_train], [Y_train],
                             validation_data=([X2_vali,X3_vali],[Y_vali]),
                             callbacks=[earlystop, reduce, logger],

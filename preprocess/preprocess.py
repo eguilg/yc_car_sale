@@ -260,4 +260,4 @@ def load_preprocessed_data(base_path='../data/',
 
 if __name__ == '__main__':
     # load_preprocessed_data(one_hot=False)
-    load_preprocessed_data(one_hot=False)
+    load_preprocessed_data(one_hot=True)
